@@ -22,14 +22,12 @@ Success test still to do: Luke sorts about 50 photos by hand in OneDrive (timed)
 - **Zips:** custom reader (end-of-central-directory, ZIP64, central directory, `deflate-raw` via DecompressionStream). Entries are unzipped lazily per photo. Skips `__MACOSX`, dotfiles, encrypted entries, and zips inside zips. A broken zip gives a clear message.
 - **Skipped types:** HEIC, CR3, NEF, ARW, DNG, TIFF. The top bar counts them.
 
-## Requested next feature: "Needs post processing"
-Luke wants a way to mark a photo as "needs post processing" while sorting.
-
-Suggested design (confirm with Luke first, he wants plan-first):
-- New decision code `edit` with a button labelled "Needs post processing" and a keyboard shortcut. Suggest the Up arrow, since Left, Right, and Ctrl+Z are taken and the other arrows are free.
-- It keeps the photo and saves it to a `Needs post processing/` folder inside the sorted folder. Show its count like the other piles and include it in the finish summary and in undo and resume.
-- **Open question for Luke:** can a photo be both a graded candid and need editing? Option A (simplest, recommended): it is its own pile, no grade. Option B: a toggle flag that combines with any keep or grade, saved under `Needs post processing/<pile>/`. Ask one question, then build.
-- Exports follow the same JPG/PNG rule.
+## Needs post processing (built)
+- Up arrow or the "Needs post processing" button flags the photo on screen. It is a toggle that combines with Keep or a grade (option B, chosen by Luke). It resets after each decision, and Undo brings it back. A flagged reject just rejects.
+- Stored as a suffix on the decision code, for example `g6+edit`. Old saved decisions still work.
+- Saving puts flagged photos in `Needs post processing/<pile>/` (for example `Needs post processing/Keep/`) and not in the normal pile folder. Pile counts include flagged photos, with a separate count for the flag.
+- The start screen asks "What photos are these for?". The answer names the sorted folder. It can still be changed on the finish panel. Blank falls back to the old default.
+- Tests: `node test_edit.js`.
 
 ## Known gaps and things to verify
 1. **Never run against a real CR2.** Tests use synthetic CR2 files. Have Luke try CR2s from the 5D Mark III, 5D Mark I, and Rebel T6/T7. Check the preview size, the orientation on portrait shots, and that RAW+JPEG pairs behave.
@@ -53,5 +51,6 @@ python3 make_fixtures.py   # needs Pillow; writes tests/fx/
 node test_dragdrop.js
 node test_foldermode.js
 node test_zip_cr2.js
+node test_edit.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../photo-sorter.html` and mock the File System Access API. A real-browser check is still needed (see gap 1 and 2).

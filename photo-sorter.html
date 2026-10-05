@@ -15,6 +15,7 @@
   --keep:#4fc08d;
   --reject:#ee6055;
   --grade:#f2b84b;
+  --edit:#8ab4f8;
   font-family:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
@@ -67,6 +68,12 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #keepBtn{background:var(--keep);justify-self:end}
 .act:hover{filter:brightness(1.08)}
 .act:active{transform:translateY(1px)}
+#center{display:grid;gap:.6rem;justify-items:center}
+#editBtn{min-height:2.4rem;border-radius:8px;border:2px solid var(--edit);background:transparent;color:var(--edit);font-weight:700;display:inline-flex;gap:.5rem;align-items:center;padding:0 .9rem}
+#editBtn kbd{font:inherit;font-size:.8rem;padding:.05rem .4rem;border-radius:5px;background:rgba(255,255,255,.14)}
+#editBtn .n{color:var(--muted);font-weight:500;font-size:.85rem}
+#editBtn[aria-pressed=true]{background:var(--edit);color:var(--ink)}
+#editBtn[aria-pressed=true] .n{color:var(--ink)}
 #grades{display:grid;gap:.4rem;justify-items:center}
 #grades .cap{font-size:.8rem;color:var(--muted)}
 #grades .row{display:flex;gap:.5rem}
@@ -85,6 +92,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 .tag-keep{background:var(--keep)}
 .tag-reject{background:var(--reject)}
 .tag-grade{background:var(--grade)}
+.tag-edit{background:var(--edit)}
 @keyframes flyR{to{transform:translateX(55vw) rotate(7deg);opacity:0}}
 @keyframes flyL{to{transform:translateX(-55vw) rotate(-7deg);opacity:0}}
 @media (prefers-reduced-motion:reduce){.fly{display:none}#progressFill{transition:none}}
@@ -115,7 +123,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 
 @media (max-width:700px){
   #controls{grid-template-columns:1fr 1fr;grid-template-areas:"grades grades" "reject keep"}
-  #grades{grid-area:grades}
+  #center{grid-area:grades}
   #rejectBtn{grid-area:reject;justify-self:stretch;justify-content:center}
   #keepBtn{grid-area:keep;justify-self:stretch;justify-content:center}
 }
@@ -136,6 +144,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
         <button id="chooseFolderBtn" class="btn ghost" type="button">Choose a folder</button>
       </div>
       <input id="fileInput" type="file" multiple accept="image/*,.cr2,.zip" hidden>
+    </div>
+
+    <div class="field">
+      <label for="eventInput">What photos are these for?</label>
+      <input id="eventInput" type="text" autocomplete="off" placeholder="For example: Spring Dance">
     </div>
 
     <label class="check">
@@ -169,6 +182,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
   </section>
   <footer id="controls">
     <button id="rejectBtn" class="act" type="button"><kbd>←</kbd> Reject <span class="n num" id="nReject">0</span></button>
+    <div id="center">
     <div id="grades">
       <div class="cap">Keep and tag the grade</div>
       <div class="row">
@@ -176,6 +190,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
         <button class="grade" type="button" data-code="g7">7th <span class="n num" id="n7">0</span></button>
         <button class="grade" type="button" data-code="g8">8th <span class="n num" id="n8">0</span></button>
       </div>
+    </div>
+    <button id="editBtn" type="button" aria-pressed="false"><kbd>↑</kbd> Needs post processing <span class="n num" id="nEdit">0</span></button>
     </div>
     <button id="keepBtn" class="act" type="button"><span class="n num" id="nKeep">0</span> Keep <kbd>→</kbd></button>
   </footer>
@@ -198,6 +214,10 @@ const KEEP_AS_IS = /\.(jpe?g|png)$/i;      // already JPG or PNG, saved untouche
 const CAMERA_ONLY = /\.(cr3|heic|heif|nef|arw|dng|tiff?)$/i;
 const GRADE_FOLDERS = {g6:'6th grade candids', g7:'7th grade candids', g8:'8th grade candids'};
 const LABELS = {keep:'Keep', reject:'Reject', g6:'6th grade', g7:'7th grade', g8:'8th grade'};
+const EDIT_FOLDER = 'Needs post processing';
+const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th grade and flag for editing
+const baseCode = d => d ? d.split('+')[0] : d;
+const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
 const SETTINGS_KEY = 'photosorter:v1:settings';
 const DECISIONS_KEY = 'photosorter:v2:decisions';
 
@@ -209,7 +229,8 @@ const state = {
   eventName: '',
   useGrades: true,
   items: [],        // { key, name, size, mtime, handle }
-  decisions: [],    // null | 'keep' | 'reject' | 'g6' | 'g7' | 'g8', one per photo
+  decisions: [],    // null | 'keep' | 'reject' | 'g6' | 'g7' | 'g8', plus '+edit' on a keep or grade; one per photo
+  pendingEdit: false, // "Needs post processing" is switched on for the photo on screen
   index: 0,
   skippedCamera: 0,
   pairsSkipped: 0,
@@ -679,8 +700,9 @@ async function ingest(handles, opts){
   const dirs = handles.filter(h => h && h.kind === 'directory');
   state.sourceDir = opts.folder || null;
   state.folderName = opts.folder ? opts.folder.name : '';
-  state.eventName = opts.folder ? opts.folder.name
-                  : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName());
+  const typedName = $('eventInput').value.trim();
+  state.eventName = typedName || (opts.folder ? opts.folder.name
+                  : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.useGrades = $('useGrades').checked;
   writeJSON(SETTINGS_KEY, { useGrades: state.useGrades });
 
@@ -690,6 +712,7 @@ async function ingest(handles, opts){
   state.badZips = built.badZips;
   state.decisions = built.items.map(it => store[it.key] || null);
   state.index = 0;
+  state.pendingEdit = false;
   setStartMsg('');
 
   const restored = state.decisions.filter(Boolean).length;
@@ -751,6 +774,8 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
+  state.pendingEdit = false;
+  $('eventInput').value = '';
   clearCache();
   $('photo').removeAttribute('src');
   $('sort').hidden = true;
@@ -834,8 +859,12 @@ function beginSorting(startAt){
 }
 
 function tally(){
-  const t = { keep: 0, reject: 0, g6: 0, g7: 0, g8: 0 };
-  for (const d of state.decisions) if (d && t[d] !== undefined) t[d]++;
+  const t = { keep: 0, reject: 0, g6: 0, g7: 0, g8: 0, edit: 0 };
+  for (const d of state.decisions){
+    const b = baseCode(d);
+    if (b && t[b] !== undefined) t[b]++;
+    if (isEdit(d)) t.edit++;
+  }
   return t;
 }
 
@@ -851,6 +880,8 @@ function render(){
   $('n6').textContent = t.g6;
   $('n7').textContent = t.g7;
   $('n8').textContent = t.g8;
+  $('nEdit').textContent = t.edit;
+  $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
   $('undoBtn').disabled = state.index === 0;
 
   $('endMsg').hidden = !atEnd;
@@ -864,13 +895,21 @@ function decide(code){
   if (state.mode !== 'sort' || state.index >= state.items.length) return;
   if (!state.useGrades && code.startsWith('g')) return;
 
-  flyOff(code);
-  state.decisions[state.index] = code;
-  store[state.items[state.index].key] = code;
+  const full = state.pendingEdit && code !== 'reject' ? code + EDIT_SUFFIX : code;
+  flyOff(full);
+  state.pendingEdit = false;
+  state.decisions[state.index] = full;
+  store[state.items[state.index].key] = full;
   persist();
   state.index++;
   render();
   if (state.index >= state.items.length) openFinish();
+}
+
+function toggleEdit(){
+  if (state.mode !== 'sort' || state.index >= state.items.length) return;
+  state.pendingEdit = !state.pendingEdit;
+  $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
 }
 
 function undo(){
@@ -881,6 +920,7 @@ function undo(){
   }
   if (state.mode !== 'sort') return;
   state.index--;
+  state.pendingEdit = isEdit(state.decisions[state.index]);
   state.decisions[state.index] = null;
   delete store[state.items[state.index].key];
   persist();
@@ -893,6 +933,8 @@ function flyOff(code){
   if (!img.getAttribute('src')) return;
   const r = img.getBoundingClientRect();
   const left = code === 'reject';
+  const edit = isEdit(code);
+  code = baseCode(code);
   const fly = el('div', { class: 'fly ' + (left ? 'left' : 'right') });
   fly.style.left = r.left + 'px';
   fly.style.top = r.top + 'px';
@@ -901,7 +943,7 @@ function flyOff(code){
   const copy = el('img', { alt: '' });
   copy.src = img.src;
   const kind = code === 'keep' ? 'keep' : code === 'reject' ? 'reject' : 'grade';
-  fly.append(copy, el('div', { class: 'tag tag-' + kind, text: LABELS[code] }));
+  fly.append(copy, el('div', { class: 'tag tag-' + kind, text: LABELS[code] + (edit ? ' + edit' : '') }));
   document.body.append(fly);
   const gone = () => fly.remove();
   fly.addEventListener('animationend', gone);
@@ -945,6 +987,7 @@ function openFinish(){
     ['Rejected', t.reject]
   ];
   if (state.useGrades) rows.splice(1, 0, ['6th grade', t.g6], ['7th grade', t.g7], ['8th grade', t.g8]);
+  if (t.edit > 0) rows.push(['Needs post processing (also counted above)', t.edit]);
   if (unsorted > 0) rows.push(['Not sorted yet', unsorted]);
 
   const toCopy = t.keep + t.g6 + t.g7 + t.g8;
@@ -952,7 +995,7 @@ function openFinish(){
   const where = el('p');
   const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
   const refreshWhere = () => {
-    where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Rejected photos are not copied. Your originals are not changed or deleted.`;
+    where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
   };
   nameInput.addEventListener('input', () => {
     state.eventName = nameInput.value.trim() || defaultEventName();
@@ -1045,8 +1088,9 @@ async function saveAll(){
 
   const jobs = [];
   state.decisions.forEach((code, i) => {
-    if (!code || code === 'reject') return;
-    jobs.push({ i, folder: code === 'keep' ? 'Keep' : GRADE_FOLDERS[code] });
+    const b = baseCode(code);
+    if (!b || b === 'reject') return;
+    jobs.push({ i, folder: b === 'keep' ? 'Keep' : GRADE_FOLDERS[b], edit: isEdit(code) });
   });
 
   let copied = 0, already = 0, done = 0;
@@ -1055,11 +1099,16 @@ async function saveAll(){
     const outDir = await dest.getDirectoryHandle(outputFolderName(), { create: true });
     const dirs = {};
     for (const j of jobs){
-      if (!dirs[j.folder]) dirs[j.folder] = await outDir.getDirectoryHandle(j.folder, { create: true });
+      const id = (j.edit ? EDIT_FOLDER + '/' : '') + j.folder;
+      j.id = id;
+      if (!dirs[id]){
+        const parent = j.edit ? await outDir.getDirectoryHandle(EDIT_FOLDER, { create: true }) : outDir;
+        dirs[id] = await parent.getDirectoryHandle(j.folder, { create: true });
+      }
     }
     for (const j of jobs){
       try {
-        const result = await copyOne(state.items[j.i], dirs[j.folder]);
+        const result = await copyOne(state.items[j.i], dirs[j.id]);
         if (result === 'copied') copied++; else already++;
       } catch (err){
         failed.push(`${state.items[j.i].name} (${err && err.message ? err.message : 'could not be saved'})`);
@@ -1161,6 +1210,7 @@ function bindSortControls(){
   document.querySelectorAll('.grade').forEach(b => {
     b.addEventListener('click', e => { decide(b.dataset.code); e.currentTarget.blur(); });
   });
+  $('editBtn').addEventListener('click', e => { toggleEdit(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
   $('endFinishBtn').addEventListener('click', openFinish);
@@ -1184,6 +1234,7 @@ function bindSortControls(){
 
     if (e.key === 'ArrowRight'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) toggleEdit(); }
   });
 }
 
