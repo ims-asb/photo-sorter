@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo sorter</title>
+<style>
+:root{
+  --bg:#383838;
+  --bar:#2d2d2d;
+  --line:#4d4d4d;
+  --text:#f3f3f3;
+  --muted:#bdbdbd;
+  --ink:#1c1c1c;
+  --keep:#4fc08d;
+  --reject:#ee6055;
+  --grade:#f2b84b;
+  font-family:"Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text)}
+[hidden]{display:none !important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:default;opacity:.45}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* start screen */
+#start{min-height:100%;display:grid;align-content:center;padding:2rem 1.25rem}
+#start .col{width:min(34rem,100%);margin:0 auto}
+#start h1{font-size:clamp(2rem,6vw,3rem);line-height:1.05;letter-spacing:-.02em;margin:0 0 1rem;font-weight:750}
+#start p{color:var(--muted);line-height:1.5;margin:0 0 1.5rem;max-width:32rem}
+.field{display:grid;gap:.4rem;margin-bottom:1.1rem}
+.field label{font-size:.9rem;color:var(--muted)}
+.field input[type=text]{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%}
+.check{display:flex;gap:.6rem;align-items:flex-start;margin-bottom:1.5rem;line-height:1.35}
+.check input{margin-top:.2rem;width:1.1rem;height:1.1rem;accent-color:var(--grade)}
+.check small{display:block;color:var(--muted);margin-top:.15rem}
+.btn{border:0;border-radius:10px;padding:.85rem 1.3rem;font-weight:650;background:var(--text);color:var(--ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:550}
+.btn.ghost:hover:not(:disabled){border-color:var(--muted)}
+#startMsg{margin-top:1rem;min-height:1.4rem;color:var(--muted)}
+#startMsg.err{color:var(--reject)}
+
+/* sorting screen */
+#sort{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;height:100vh;height:100dvh}
+#bar{display:flex;align-items:center;gap:.9rem;padding:.65rem 1rem;background:var(--bar)}
+#eventTitle{font-weight:650;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#count{color:var(--muted)}
+#note{color:var(--muted);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#bar .spacer{flex:1}
+#bar .btn{padding:.5rem .9rem;font-size:.9rem}
+#progress{height:3px;background:var(--line)}
+#progressFill{height:100%;width:0;background:var(--text);transition:width .15s}
+#stage{position:relative;min-height:0;padding:1rem}
+#photo{width:100%;height:100%;object-fit:contain;display:block}
+#fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
+#endMsg h2{margin:0;font-size:1.6rem}
+
+#controls{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:.8rem 1rem 1rem;background:var(--bar);border-top:1px solid var(--line)}
+.act{display:inline-flex;align-items:center;gap:.7rem;border:0;border-radius:14px;min-height:3.5rem;padding:0 1.3rem;font-weight:700;font-size:1.05rem;color:var(--ink)}
+.act .n{font-weight:600;opacity:.75}
+.act kbd{font:inherit;font-size:.9rem;padding:.1rem .45rem;border-radius:5px;background:rgba(0,0,0,.18)}
+#rejectBtn{background:var(--reject);justify-self:start}
+#keepBtn{background:var(--keep);justify-self:end}
+.act:hover{filter:brightness(1.08)}
+.act:active{transform:translateY(1px)}
+#grades{display:grid;gap:.4rem;justify-items:center}
+#grades .cap{font-size:.8rem;color:var(--muted)}
+#grades .row{display:flex;gap:.5rem}
+.grade{min-width:4.2rem;min-height:2.6rem;border-radius:8px;border:2px solid var(--grade);background:transparent;color:var(--grade);font-weight:700;display:inline-flex;gap:.45rem;align-items:center;justify-content:center;padding:0 .8rem}
+.grade .n{color:var(--muted);font-weight:500;font-size:.85rem}
+.grade:hover{background:var(--grade);color:var(--ink)}
+.grade:hover .n{color:var(--ink)}
+
+/* the photo that leaves when you decide */
+.fly{position:fixed;z-index:30;pointer-events:none;animation:flyR .28s cubic-bezier(.4,0,.8,.6) forwards}
+.fly.left{animation-name:flyL}
+.fly img{width:100%;height:100%;object-fit:contain;display:block}
+.fly .tag{position:absolute;top:12px;padding:.25rem .7rem;border-radius:6px;font-weight:750;color:var(--ink)}
+.fly.right .tag{left:14px}
+.fly.left .tag{right:14px}
+.tag-keep{background:var(--keep)}
+.tag-reject{background:var(--reject)}
+.tag-grade{background:var(--grade)}
+@keyframes flyR{to{transform:translateX(55vw) rotate(7deg);opacity:0}}
+@keyframes flyL{to{transform:translateX(-55vw) rotate(-7deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.fly{display:none}#progressFill{transition:none}}
+
+
+/* drop zone and drag veil */
+.dropzone{border:2px dashed var(--line);border-radius:16px;padding:1.6rem 1.4rem;margin-bottom:1.4rem;transition:border-color .12s,background .12s}
+.dropzone.over{border-color:var(--keep);background:rgba(79,192,141,.09)}
+.dz-title{font-size:1.3rem;font-weight:700;margin-bottom:.3rem}
+.dz-sub{color:var(--muted);margin:0 0 1.1rem;line-height:1.4}
+.dz-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+#veil{position:fixed;inset:10px;z-index:60;display:grid;place-items:center;background:rgba(0,0,0,.62);border:3px dashed var(--keep);border-radius:18px;font-size:1.6rem;font-weight:700;pointer-events:none}
+.sheet input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.6rem .7rem;margin-top:.3rem}
+.sheet label{color:var(--muted);font-size:.9rem}
+
+/* panels */
+#panel{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:1rem}
+.sheet{width:min(30rem,100%);max-height:100%;overflow:auto;background:var(--bar);border:1px solid var(--line);border-radius:14px;padding:1.5rem}
+.sheet h2{margin:0 0 .6rem;font-size:1.4rem}
+.sheet p{color:var(--muted);line-height:1.45;margin:.4rem 0 1rem}
+.sheet dl{display:grid;grid-template-columns:1fr auto;gap:.35rem 1.5rem;margin:1rem 0}
+.sheet dt{color:var(--muted)}
+.sheet dd{margin:0;text-align:right;font-weight:650}
+.sheet .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+.sheet .small{font-size:.85rem}
+.bigbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:1rem 0 .5rem}
+.bigbar div{height:100%;width:0;background:var(--keep)}
+
+@media (max-width:700px){
+  #controls{grid-template-columns:1fr 1fr;grid-template-areas:"grades grades" "reject keep"}
+  #grades{grid-area:grades}
+  #rejectBtn{grid-area:reject;justify-self:stretch;justify-content:center}
+  #keepBtn{grid-area:keep;justify-self:stretch;justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<main id="start">
+  <div class="col">
+    <h1>Sort photos fast</h1>
+    <p>Add your photos, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
+
+    <div id="drop" class="dropzone">
+      <div class="dz-title">Drop photos, folders, or zip files here</div>
+      <p class="dz-sub">JPG, PNG, WebP, and Canon CR2 photos all work, and zip files are opened for you. Everything is saved as JPG or PNG. You can drop more at any time while you sort.</p>
+      <div class="dz-actions">
+        <button id="choosePhotosBtn" class="btn" type="button">Choose photos</button>
+        <button id="chooseFolderBtn" class="btn ghost" type="button">Choose a folder</button>
+      </div>
+      <input id="fileInput" type="file" multiple accept="image/*,.cr2,.zip" hidden>
+    </div>
+
+    <label class="check">
+      <input id="useGrades" type="checkbox" checked>
+      <span>Tag candids by grade
+        <small>Adds 6th, 7th, and 8th grade buttons. Turn this off for assemblies and other events.</small>
+      </span>
+    </label>
+
+    <div id="startMsg" role="status" aria-live="polite"></div>
+  </div>
+</main>
+
+<div id="sort" hidden>
+  <header id="bar">
+    <div id="eventTitle"></div>
+    <div id="count" class="num"></div>
+    <div id="note"></div>
+    <div class="spacer"></div>
+    <button id="undoBtn" class="btn ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="finishBtn" class="btn" type="button">Finish and save</button>
+  </header>
+  <div id="progress"><div id="progressFill"></div></div>
+  <section id="stage">
+    <img id="photo" alt="">
+    <div id="fname"></div>
+    <div id="endMsg" hidden>
+      <h2>That was the last photo</h2>
+      <div><button id="endFinishBtn" class="btn" type="button">Finish and save</button></div>
+    </div>
+  </section>
+  <footer id="controls">
+    <button id="rejectBtn" class="act" type="button"><kbd>←</kbd> Reject <span class="n num" id="nReject">0</span></button>
+    <div id="grades">
+      <div class="cap">Keep and tag the grade</div>
+      <div class="row">
+        <button class="grade" type="button" data-code="g6">6th <span class="n num" id="n6">0</span></button>
+        <button class="grade" type="button" data-code="g7">7th <span class="n num" id="n7">0</span></button>
+        <button class="grade" type="button" data-code="g8">8th <span class="n num" id="n8">0</span></button>
+      </div>
+    </div>
+    <button id="keepBtn" class="act" type="button"><span class="n num" id="nKeep">0</span> Keep <kbd>→</kbd></button>
+  </footer>
+</div>
+
+<div id="veil" hidden></div>
+
+<div id="panel" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
+<noscript>This tool needs JavaScript turned on.</noscript>
+
+<script>
+(() => {
+'use strict';
+
+const SHOWABLE = /\.(jpe?g|png|webp|gif|bmp|avif)$/i;
+const RAW_EXT = /\.cr2$/i;                 // Canon RAW: we use the full-size JPEG preview stored inside it
+const ZIP_EXT = /\.zip$/i;
+const KEEP_AS_IS = /\.(jpe?g|png)$/i;      // already JPG or PNG, saved untouched
+const CAMERA_ONLY = /\.(cr3|heic|heif|nef|arw|dng|tiff?)$/i;
+const GRADE_FOLDERS = {g6:'6th grade candids', g7:'7th grade candids', g8:'8th grade candids'};
+const LABELS = {keep:'Keep', reject:'Reject', g6:'6th grade', g7:'7th grade', g8:'8th grade'};
+const SETTINGS_KEY = 'photosorter:v1:settings';
+const DECISIONS_KEY = 'photosorter:v2:decisions';
+
+const $ = id => document.getElementById(id);
+
+const state = {
+  sourceDir: null,  // writable folder, only when "Choose a folder" was used
+  folderName: '',
+  eventName: '',
+  useGrades: true,
+  items: [],        // { key, name, size, mtime, handle }
+  decisions: [],    // null | 'keep' | 'reject' | 'g6' | 'g7' | 'g8', one per photo
+  index: 0,
+  skippedCamera: 0,
+  pairsSkipped: 0,
+  badZips: [],
+  mode: 'start',    // start | sort | panel
+  panelKind: null,  // resume | finish | saving | done
+  saving: false,
+};
+
+/* ---------- small helpers ---------- */
+
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)){
+    if (v == null) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()){
+    if (kid == null) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+
+function reducedMotion(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+function safeName(s){
+  return String(s).replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
+}
+
+function readJSON(key){
+  try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
+}
+function writeJSON(key, val){
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* storage blocked, progress just won't be remembered */ }
+}
+
+function defaultEventName(){
+  const d = new Date();
+  return 'Photos ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/* Decisions are remembered per photo (name, size, and date), so the same photos pick up
+   where you left off no matter which folder or drag they come from. */
+let store = readJSON(DECISIONS_KEY) || {};
+let saveTimer = null;
+function flushStore(){
+  if (saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
+  writeJSON(DECISIONS_KEY, store);
+}
+function persist(){
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushStore, 250);
+}
+window.addEventListener('pagehide', flushStore);
+
+
+/* ---------- zip files (read in the browser, nothing is uploaded) ---------- */
+
+const u16 = (dv, o) => dv.getUint16(o, true);
+const u32 = (dv, o) => dv.getUint32(o, true);
+const u64 = (dv, o) => Number(dv.getBigUint64(o, true));
+
+async function readZipEntries(file){
+  const size = file.size;
+  const tailLen = Math.min(size, 65557 + 22);
+  const tail = await file.slice(size - tailLen, size).arrayBuffer();
+  const dv = new DataView(tail);
+  let eocd = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--){
+    if (dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('this does not look like a zip file');
+  let total = u16(dv, eocd + 10), cdSize = u32(dv, eocd + 12), cdOff = u32(dv, eocd + 16);
+  if (total === 0xFFFF || cdSize === 0xFFFFFFFF || cdOff === 0xFFFFFFFF){
+    const loc = eocd - 20;
+    if (loc < 0 || dv.getUint32(loc, true) !== 0x07064b50) throw new Error('unsupported zip layout');
+    const z64 = u64(dv, loc + 8);
+    const rec = new DataView(await file.slice(z64, z64 + 56).arrayBuffer());
+    if (rec.getUint32(0, true) !== 0x06064b50) throw new Error('unsupported zip layout');
+    total = u64(rec, 32); cdSize = u64(rec, 40); cdOff = u64(rec, 48);
+  }
+  const cd = await file.slice(cdOff, cdOff + cdSize).arrayBuffer();
+  const cv = new DataView(cd), bytes = new Uint8Array(cd);
+  const dec = new TextDecoder('utf-8');
+  const out = [];
+  let p = 0;
+  for (let n = 0; n < total && p + 46 <= cd.byteLength; n++){
+    if (cv.getUint32(p, true) !== 0x02014b50) break;
+    const flags = u16(cv, p + 8), method = u16(cv, p + 10), time = u16(cv, p + 12), date = u16(cv, p + 14);
+    let comp = u32(cv, p + 20), usize = u32(cv, p + 24);
+    const nlen = u16(cv, p + 28), elen = u16(cv, p + 30), clen = u16(cv, p + 32);
+    let off = u32(cv, p + 42);
+    const name = dec.decode(bytes.subarray(p + 46, p + 46 + nlen));
+    if (usize === 0xFFFFFFFF || comp === 0xFFFFFFFF || off === 0xFFFFFFFF){
+      let q = p + 46 + nlen;
+      const end = q + elen;
+      while (q + 4 <= end){
+        const id = u16(cv, q), len = u16(cv, q + 2);
+        if (id === 1){
+          let r = q + 4;
+          if (usize === 0xFFFFFFFF){ usize = u64(cv, r); r += 8; }
+          if (comp === 0xFFFFFFFF){ comp = u64(cv, r); r += 8; }
+          if (off === 0xFFFFFFFF){ off = u64(cv, r); }
+        }
+        q += 4 + len;
+      }
+    }
+    const mtime = new Date(((date >> 9) & 0x7f) + 1980, ((date >> 5) & 0xf) - 1, date & 0x1f,
+                           (time >> 11) & 0x1f, (time >> 5) & 0x3f, (time & 0x1f) * 2).getTime();
+    out.push({ name, flags, method, comp, size: usize, off, mtime });
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+async function zipEntryFile(zipFile, e, baseName){
+  const lv = new DataView(await zipFile.slice(e.off, e.off + 30).arrayBuffer());
+  if (lv.getUint32(0, true) !== 0x04034b50) throw new Error('damaged zip entry');
+  const start = e.off + 30 + u16(lv, 26) + u16(lv, 28);
+  const raw = zipFile.slice(start, start + e.comp);
+  let blob;
+  if (e.method === 0) blob = raw;
+  else if (e.method === 8){
+    if (typeof DecompressionStream !== 'function') throw new Error('this browser cannot open zip files, use Chrome or Edge');
+    blob = await new Response(raw.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
+  } else throw new Error('this zip uses a compression type that is not supported');
+  return new File([blob], baseName, { lastModified: e.mtime });
+}
+
+function zipHandles(zipFile, entries){
+  const hs = [];
+  for (const e of entries){
+    if (e.name.endsWith('/')) continue;
+    const parts = e.name.split('/');
+    const base = parts[parts.length - 1];
+    if (!base || base.startsWith('.') || parts.includes('__MACOSX')) continue;
+    if (e.flags & 1) continue; // password protected
+    hs.push({
+      kind: 'file', name: base, fromZip: true,
+      meta: { size: e.size, lastModified: e.mtime, key: `${zipFile.name}!${e.name}|${e.size}|${e.mtime}` },
+      getFile: () => zipEntryFile(zipFile, e, base)
+    });
+  }
+  return hs;
+}
+
+/* ---------- Canon CR2: pull out the full-size JPEG preview stored inside ---------- */
+
+// Reads one JPEG starting at `start`. Returns its end and size, or null if it is not a normal
+// photo JPEG. The lossless JPEG that holds the actual RAW data is rejected on purpose.
+function parseJpeg(u8, start){
+  const n = u8.length;
+  let i = start + 2, width = 0, height = 0, ok = false;
+  while (i + 3 < n){
+    if (u8[i] !== 0xFF) return null;
+    const m = u8[i + 1];
+    if (m === 0xFF){ i++; continue; }
+    if (m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    if (m === 0xD9) return null;
+    const len = (u8[i + 2] << 8) | u8[i + 3];
+    if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC){
+      if (m === 0xC0 || m === 0xC1 || m === 0xC2){
+        height = (u8[i + 5] << 8) | u8[i + 6];
+        width = (u8[i + 7] << 8) | u8[i + 8];
+        ok = true;
+      } else return null;
+    }
+    i += 2 + len;
+    if (m === 0xDA){
+      let ended = false;
+      while (i < n - 1){
+        if (u8[i] === 0xFF){
+          const nx = u8[i + 1];
+          if (nx === 0x00 || (nx >= 0xD0 && nx <= 0xD7)){ i += 2; continue; }
+          if (nx === 0xFF){ i++; continue; }
+          if (nx === 0xD9) return ok && width && height ? { end: i + 2, width, height } : null;
+          ended = true;
+          break;
+        }
+        i++;
+      }
+      if (!ended) return null;
+    }
+  }
+  return null;
+}
+
+function findBestJpeg(u8){
+  let best = null, pos = 0;
+  while (pos < u8.length - 3){
+    const f = u8.indexOf(0xFF, pos);
+    if (f < 0 || f > u8.length - 4) break;
+    if (u8[f + 1] === 0xD8 && u8[f + 2] === 0xFF){
+      const r = parseJpeg(u8, f);
+      if (r){
+        const cand = { start: f, end: r.end, width: r.width, height: r.height };
+        const area = r.width * r.height;
+        if (!best || area > best.width * best.height || (area === best.width * best.height && r.end - f > best.end - best.start)) best = cand;
+        pos = r.end;
+        continue;
+      }
+    }
+    pos = f + 1;
+  }
+  return best;
+}
+
+function readTiffOrientation(u8){
+  if (u8.length < 16) return 1;
+  const le = u8[0] === 0x49 && u8[1] === 0x49;
+  if (!le && !(u8[0] === 0x4D && u8[1] === 0x4D)) return 1;
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  if (dv.getUint16(2, le) !== 42) return 1;
+  const ifd = dv.getUint32(4, le);
+  if (ifd + 2 > u8.length) return 1;
+  const count = dv.getUint16(ifd, le);
+  for (let k = 0; k < count; k++){
+    const e = ifd + 2 + k * 12;
+    if (e + 12 > u8.length) break;
+    if (dv.getUint16(e, le) === 0x0112){
+      const v = dv.getUint16(e + 8, le);
+      return v >= 1 && v <= 8 ? v : 1;
+    }
+  }
+  return 1;
+}
+
+// The preview inside a CR2 has no rotation info, so portrait shots would show sideways.
+// Add a tiny EXIF block with the camera's orientation so it opens upright everywhere.
+function withOrientation(jpeg, o){
+  if (o === 1) return jpeg;
+  const seg = new Uint8Array([
+    0xFF, 0xE1, 0x00, 0x22, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+    0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, o, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00
+  ]);
+  const out = new Uint8Array(jpeg.length + seg.length);
+  out.set(jpeg.subarray(0, 2), 0);
+  out.set(seg, 2);
+  out.set(jpeg.subarray(2), 2 + seg.length);
+  return out;
+}
+
+async function extractCr2Preview(file){
+  const first = Math.min(file.size, 12 * 1024 * 1024);
+  let buf = new Uint8Array(await file.slice(0, first).arrayBuffer());
+  let best = findBestJpeg(buf);
+  if ((!best || best.width * best.height < 1000000) && file.size > first){
+    buf = new Uint8Array(await file.arrayBuffer());
+    best = findBestJpeg(buf);
+  }
+  if (!best) throw new Error('no preview image found inside this RAW file');
+  if (best.width * best.height < 300000) throw new Error(`only a tiny ${best.width}×${best.height} thumbnail is stored in this RAW file`);
+  const bytes = withOrientation(buf.subarray(best.start, best.end), readTiffOrientation(buf));
+  return { blob: new Blob([bytes], { type: 'image/jpeg' }), width: best.width, height: best.height };
+}
+
+/* ---------- what we show and what we save ---------- */
+
+const baseOf = n => n.replace(/\.[^.]+$/, '');
+
+async function photoBlob(item){
+  const file = await item.handle.getFile();
+  if (item.raw){
+    const r = await extractCr2Preview(file);
+    return { blob: r.blob, name: baseOf(item.name) + '.jpg', info: `RAW preview ${r.width}×${r.height}` };
+  }
+  return { blob: file, name: item.name, info: '' };
+}
+
+async function convertToJpg(blob){
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement('canvas');
+  c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bmp, 0, 0);
+  if (bmp.close) bmp.close();
+  return await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('could not convert this photo')), 'image/jpeg', 0.95));
+}
+
+// Everything saved is a JPG or PNG. JPG and PNG go out untouched, CR2 becomes the JPG
+// preview, and WebP, GIF, BMP, and AVIF are converted to JPG.
+async function exportBlob(item){
+  const p = await photoBlob(item);
+  if (item.raw || KEEP_AS_IS.test(item.name)) return p;
+  return { blob: await convertToJpg(p.blob), name: baseOf(item.name) + '.jpg', info: '' };
+}
+
+/* ---------- start screen ---------- */
+
+function setStartMsg(text, isError){
+  const m = $('startMsg');
+  m.textContent = text || '';
+  m.classList.toggle('err', !!isError);
+}
+
+function setBusy(busy){
+  $('choosePhotosBtn').disabled = busy;
+  $('chooseFolderBtn').disabled = busy;
+}
+
+function initStart(){
+  const s = readJSON(SETTINGS_KEY);
+  if (s && typeof s.useGrades === 'boolean') $('useGrades').checked = s.useGrades;
+
+  if (typeof window.showDirectoryPicker !== 'function'){
+    setBusy(true);
+    setStartMsg('This tool needs Chrome or Edge on a computer. Open this file there to use it.', true);
+  }
+  $('chooseFolderBtn').addEventListener('click', chooseFolder);
+  $('choosePhotosBtn').addEventListener('click', choosePhotos);
+  $('fileInput').addEventListener('change', e => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length) ingest(files.map(wrapFile), {});
+  });
+}
+
+function wrapFile(f){
+  return { kind: 'file', name: f.name, getFile: async () => f };
+}
+
+async function chooseFolder(){
+  let handle;
+  try {
+    handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'photo-sorter' });
+  } catch (e){
+    if (e && e.name === 'AbortError') return;
+    setStartMsg('Could not open that folder. Chrome may not open top-level folders like Downloads, Documents, or Desktop. Put the photos in a regular folder inside one of them and try again.', true);
+    return;
+  }
+  ingest([handle], { folder: handle });
+}
+
+async function choosePhotos(){
+  if (typeof window.showOpenFilePicker !== 'function'){
+    $('fileInput').click();
+    return;
+  }
+  let handles;
+  try {
+    handles = await window.showOpenFilePicker({
+      multiple: true,
+      id: 'photo-sorter-files',
+      types: [{ description: 'Photos, Canon CR2, and zip files', accept: {
+        'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'],
+        'image/x-canon-cr2': ['.cr2'],
+        'application/zip': ['.zip']
+      } }]
+    });
+  } catch (e){
+    if (e && e.name === 'AbortError') return;
+    setStartMsg('Could not open those photos: ' + (e && e.message ? e.message : e), true);
+    return;
+  }
+  ingest(handles, {});
+}
+
+/* Walk files, folders, and zip files, collecting every photo. */
+async function walk(h, out, depth){
+  if (!h) return;
+  if (h.kind === 'file'){
+    if (h.name.startsWith('.')) return;
+    if (ZIP_EXT.test(h.name)){
+      if (h.fromZip) return; // zips inside zips are not opened
+      try {
+        const f = await h.getFile();
+        const hs = zipHandles(f, await readZipEntries(f));
+        for (const zh of hs) await walk(zh, out, depth + 1);
+      } catch (e){
+        out.badZips.push(`${h.name} (${e && e.message ? e.message : 'could not be read'})`);
+      }
+      return;
+    }
+    if (SHOWABLE.test(h.name) || RAW_EXT.test(h.name)) out.files.push(h);
+    else if (CAMERA_ONLY.test(h.name)) out.skippedCamera++;
+    return;
+  }
+  if (h.kind === 'directory'){
+    if (depth > 6 || h.name.startsWith('.') || / - sorted$/i.test(h.name)) return;
+    for await (const [, child] of h.entries()) await walk(child, out, depth + 1);
+  }
+}
+
+async function buildItems(handles, existingKeys){
+  const out = { files: [], skippedCamera: 0, badZips: [] };
+  for (const h of handles) await walk(h, out, 0);
+  const seen = new Set(existingKeys || []);
+  let items = [];
+  for (const h of out.files){
+    let size, mtime, key;
+    if (h.meta){ size = h.meta.size; mtime = h.meta.lastModified; key = h.meta.key; }
+    else {
+      let f;
+      try { f = await h.getFile(); } catch (e) { continue; }
+      size = f.size; mtime = f.lastModified; key = `${h.name}|${size}|${mtime}`;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ key, name: h.name, size, mtime, raw: RAW_EXT.test(h.name), handle: h });
+  }
+
+  // Cameras set to RAW+JPEG make two files per shot. Show the JPG and skip its RAW twin.
+  const jpgTimes = new Map();
+  for (const it of items) if (!it.raw){
+    const b = baseOf(it.name).toLowerCase();
+    if (!jpgTimes.has(b)) jpgTimes.set(b, []);
+    jpgTimes.get(b).push(it.mtime);
+  }
+  let pairsSkipped = 0;
+  items = items.filter(it => {
+    if (!it.raw) return true;
+    const times = jpgTimes.get(baseOf(it.name).toLowerCase());
+    if (times && times.some(t => Math.abs(t - it.mtime) <= 3000)){ pairsSkipped++; return false; }
+    return true;
+  });
+
+  items.sort((a, b) => (a.mtime - b.mtime) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  return { items, skippedCamera: out.skippedCamera, pairsSkipped, badZips: out.badZips };
+}
+
+function noteText(){
+  const bits = [];
+  if (state.skippedCamera) bits.push(`${state.skippedCamera} unsupported RAW or HEIC file${state.skippedCamera === 1 ? '' : 's'} skipped`);
+  if (state.pairsSkipped) bits.push(`${state.pairsSkipped} RAW file${state.pairsSkipped === 1 ? '' : 's'} skipped because the JPG of the same shot is there`);
+  if (state.badZips.length) bits.push(`${state.badZips.length} zip${state.badZips.length === 1 ? '' : 's'} could not be opened`);
+  return bits.join('. ');
+}
+
+function setNote(text){
+  $('note').textContent = text;
+  $('note').title = text;
+}
+
+/* One entry point for choose folder, choose photos, and drag and drop. */
+async function ingest(handles, opts){
+  if (state.mode === 'sort' || (state.mode === 'panel' && state.panelKind === 'finish')) return addMore(handles);
+  if (state.mode !== 'start') return;
+
+  setBusy(true);
+  setStartMsg('Reading photos…');
+
+  let built;
+  try { built = await buildItems(handles, []); }
+  catch (e){
+    setBusy(false);
+    setStartMsg('Could not read those photos: ' + (e && e.message ? e.message : e), true);
+    return;
+  }
+  setBusy(false);
+
+  if (!built.items.length){
+    const why = built.badZips.length ? ` Problem with zip: ${built.badZips.join('; ')}.` : '';
+    setStartMsg('No photos found. This tool opens JPG, PNG, WebP, GIF, BMP, AVIF, and Canon CR2 files, and zip files with those inside.' + why, true);
+    return;
+  }
+
+  const dirs = handles.filter(h => h && h.kind === 'directory');
+  state.sourceDir = opts.folder || null;
+  state.folderName = opts.folder ? opts.folder.name : '';
+  state.eventName = opts.folder ? opts.folder.name
+                  : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName());
+  state.useGrades = $('useGrades').checked;
+  writeJSON(SETTINGS_KEY, { useGrades: state.useGrades });
+
+  state.items = built.items;
+  state.skippedCamera = built.skippedCamera;
+  state.pairsSkipped = built.pairsSkipped;
+  state.badZips = built.badZips;
+  state.decisions = built.items.map(it => store[it.key] || null);
+  state.index = 0;
+  setStartMsg('');
+
+  const restored = state.decisions.filter(Boolean).length;
+  if (restored > 0){
+    const next = state.decisions.findIndex(d => !d);
+    openResumePanel(restored, next === -1 ? state.items.length : next);
+  } else {
+    beginSorting(0);
+  }
+}
+
+/* Photos dropped or chosen while sorting go on the end. */
+async function addMore(handles){
+  let built;
+  try { built = await buildItems(handles, state.items.map(i => i.key)); }
+  catch (e){ return; }
+  if (!built.items.length){
+    setNote(built.badZips.length ? `Could not open: ${built.badZips.join('; ')}` : 'No new photos found in that drop');
+    return;
+  }
+  const wasAtEnd = state.index >= state.items.length;
+  const oldLen = state.items.length;
+  for (const it of built.items){
+    state.items.push(it);
+    state.decisions.push(store[it.key] || null);
+  }
+  state.skippedCamera += built.skippedCamera;
+  state.pairsSkipped += built.pairsSkipped;
+  state.badZips = state.badZips.concat(built.badZips);
+  if (state.mode === 'panel') closePanel();
+  if (wasAtEnd) state.index = oldLen;
+  setNote(`Added ${built.items.length} photo${built.items.length === 1 ? '' : 's'}`);
+  render();
+}
+
+function openResumePanel(restored, resumeAt){
+  const total = state.items.length;
+  openPanel('resume', [
+    el('h2', { text: 'Pick up where you left off?' }),
+    el('p', { text: `You already sorted ${restored} of these ${total} photos.` }),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: resumeAt >= total ? 'Review and save' : `Resume at photo ${resumeAt + 1}`,
+        onclick: () => { closePanel(); beginSorting(resumeAt); } }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Start over',
+        onclick: () => {
+          state.items.forEach(it => { delete store[it.key]; });
+          state.decisions = new Array(total).fill(null);
+          flushStore();
+          closePanel();
+          beginSorting(0);
+        } })
+    )
+  ]);
+}
+
+function resetToStart(){
+  state.mode = 'start';
+  state.items = [];
+  state.decisions = [];
+  state.index = 0;
+  state.sourceDir = null;
+  clearCache();
+  $('photo').removeAttribute('src');
+  $('sort').hidden = true;
+  $('start').hidden = false;
+  setStartMsg('');
+}
+
+/* ---------- photo loading (current photo plus a few ahead) ---------- */
+
+const urlCache = new Map();
+let showToken = 0;
+
+function ensureUrl(i){
+  if (i < 0 || i >= state.items.length) return null;
+  let e = urlCache.get(i);
+  if (!e){
+    e = { url: null, dead: false, failed: false, info: '', error: '' };
+    e.ready = photoBlob(state.items[i]).then(p => {
+      if (e.dead) return null;
+      e.url = URL.createObjectURL(p.blob);
+      e.info = p.info;
+      try {
+        const warm = new Image();
+        warm.src = e.url;
+        if (warm.decode) warm.decode().catch(() => {});
+      } catch (err) {}
+      return e.url;
+    }).catch(err => { e.failed = true; e.error = err && err.message ? err.message : ''; return null; });
+    urlCache.set(i, e);
+  }
+  return e;
+}
+
+function pruneCache(i){
+  for (const [k, e] of urlCache){
+    if (k < i - 2 || k > i + 4){
+      e.dead = true;
+      if (e.url) URL.revokeObjectURL(e.url);
+      urlCache.delete(k);
+    }
+  }
+}
+
+function clearCache(){
+  for (const [, e] of urlCache){
+    e.dead = true;
+    if (e.url) URL.revokeObjectURL(e.url);
+  }
+  urlCache.clear();
+}
+
+async function showPhoto(i){
+  const token = ++showToken;
+  const e = ensureUrl(i);
+  const url = await e.ready;
+  if (token !== showToken) return;
+  const img = $('photo');
+  if (url){
+    img.src = url;
+    $('fname').textContent = state.items[i].name + (e.info ? ' · ' + e.info : '');
+  } else {
+    img.removeAttribute('src');
+    $('fname').textContent = state.items[i].name + ` (${e.error || 'this photo can\'t be shown'}, you can still keep or reject it)`;
+  }
+  for (let k = 1; k <= 3; k++) ensureUrl(i + k);
+  pruneCache(i);
+}
+
+/* ---------- sorting ---------- */
+
+function beginSorting(startAt){
+  state.index = startAt;
+  state.mode = 'sort';
+  $('start').hidden = true;
+  $('sort').hidden = false;
+  $('eventTitle').textContent = state.eventName;
+  $('grades').hidden = !state.useGrades;
+  setNote(noteText());
+  render();
+  if (state.index >= state.items.length) openFinish();
+}
+
+function tally(){
+  const t = { keep: 0, reject: 0, g6: 0, g7: 0, g8: 0 };
+  for (const d of state.decisions) if (d && t[d] !== undefined) t[d]++;
+  return t;
+}
+
+function render(){
+  const n = state.items.length;
+  const atEnd = state.index >= n;
+  const t = tally();
+
+  $('count').textContent = atEnd ? `${n} of ${n}` : `${state.index + 1} of ${n}`;
+  $('progressFill').style.width = (n ? (state.index / n) * 100 : 0) + '%';
+  $('nReject').textContent = t.reject;
+  $('nKeep').textContent = t.keep;
+  $('n6').textContent = t.g6;
+  $('n7').textContent = t.g7;
+  $('n8').textContent = t.g8;
+  $('undoBtn').disabled = state.index === 0;
+
+  $('endMsg').hidden = !atEnd;
+  $('photo').hidden = atEnd;
+  $('fname').hidden = atEnd;
+
+  if (!atEnd) showPhoto(state.index);
+}
+
+function decide(code){
+  if (state.mode !== 'sort' || state.index >= state.items.length) return;
+  if (!state.useGrades && code.startsWith('g')) return;
+
+  flyOff(code);
+  state.decisions[state.index] = code;
+  store[state.items[state.index].key] = code;
+  persist();
+  state.index++;
+  render();
+  if (state.index >= state.items.length) openFinish();
+}
+
+function undo(){
+  if (state.saving || state.index === 0) return;
+  if (state.mode === 'panel'){
+    if (state.panelKind !== 'finish') return;
+    closePanel();
+  }
+  if (state.mode !== 'sort') return;
+  state.index--;
+  state.decisions[state.index] = null;
+  delete store[state.items[state.index].key];
+  persist();
+  render();
+}
+
+function flyOff(code){
+  if (reducedMotion()) return;
+  const img = $('photo');
+  if (!img.getAttribute('src')) return;
+  const r = img.getBoundingClientRect();
+  const left = code === 'reject';
+  const fly = el('div', { class: 'fly ' + (left ? 'left' : 'right') });
+  fly.style.left = r.left + 'px';
+  fly.style.top = r.top + 'px';
+  fly.style.width = r.width + 'px';
+  fly.style.height = r.height + 'px';
+  const copy = el('img', { alt: '' });
+  copy.src = img.src;
+  const kind = code === 'keep' ? 'keep' : code === 'reject' ? 'reject' : 'grade';
+  fly.append(copy, el('div', { class: 'tag tag-' + kind, text: LABELS[code] }));
+  document.body.append(fly);
+  const gone = () => fly.remove();
+  fly.addEventListener('animationend', gone);
+  setTimeout(gone, 700);
+}
+
+/* ---------- panels ---------- */
+
+function openPanel(kind, nodes){
+  state.panelKind = kind;
+  state.mode = 'panel';
+  const sheet = $('sheet');
+  sheet.replaceChildren(...nodes.filter(n => n != null));
+  $('panel').hidden = false;
+  const first = sheet.querySelector('button.primary') || sheet.querySelector('button');
+  if (first) first.focus();
+}
+
+function closePanel(){
+  $('panel').hidden = true;
+  state.panelKind = null;
+  state.mode = state.items.length ? 'sort' : 'start';
+}
+
+function outputFolderName(){
+  return (safeName(state.eventName) || 'Photos') + ' - sorted';
+}
+
+function whereText(){
+  return state.sourceDir ? `inside “${state.folderName}”` : 'in a folder you choose when you save';
+}
+
+function openFinish(){
+  const n = state.items.length;
+  const t = tally();
+  const sorted = state.decisions.filter(Boolean).length;
+  const unsorted = n - sorted;
+
+  const rows = [
+    ['Kept', t.keep],
+    ['Rejected', t.reject]
+  ];
+  if (state.useGrades) rows.splice(1, 0, ['6th grade', t.g6], ['7th grade', t.g7], ['8th grade', t.g8]);
+  if (unsorted > 0) rows.push(['Not sorted yet', unsorted]);
+
+  const toCopy = t.keep + t.g6 + t.g7 + t.g8;
+
+  const where = el('p');
+  const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
+  const refreshWhere = () => {
+    where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Rejected photos are not copied. Your originals are not changed or deleted.`;
+  };
+  nameInput.addEventListener('input', () => {
+    state.eventName = nameInput.value.trim() || defaultEventName();
+    $('eventTitle').textContent = state.eventName;
+    refreshWhere();
+  });
+  refreshWhere();
+
+  openPanel('finish', [
+    el('h2', { text: unsorted === 0 ? 'All photos sorted' : 'Save what you\'ve sorted so far' }),
+    el('dl', null, rows.map(([label, count]) => [el('dt', { text: label }), el('dd', { class: 'num', text: count })])),
+    el('label', { for: 'finishName', text: 'Name for the sorted folder' }),
+    nameInput,
+    where,
+    el('p', { class: 'small', text: 'Everything is saved as JPG or PNG. CR2 files are saved as JPGs from the preview built into them.' }),
+    el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Save sorted photos', disabled: toCopy === 0 ? 'disabled' : null, onclick: saveAll }),
+      el('button', { class: 'btn ghost', type: 'button',
+        text: unsorted === 0 ? 'Go back one photo' : 'Keep sorting',
+        onclick: () => { if (unsorted === 0) undo(); else closePanel(); } })
+    )
+  ]);
+  const first = $('sheet').querySelector('button.primary:not([disabled])');
+  if (first) first.focus();
+}
+
+async function exists(dir, name){
+  try {
+    const fh = await dir.getFileHandle(name);
+    return (await fh.getFile()).size;
+  } catch (e){
+    if (e && e.name === 'NotFoundError') return null;
+    throw e;
+  }
+}
+
+async function uniqueName(dir, name){
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  for (let k = 2; k < 1000; k++){
+    const candidate = `${base} (${k})${ext}`;
+    if (await exists(dir, candidate) === null) return candidate;
+  }
+  throw new Error('Too many files with the same name');
+}
+
+async function copyOne(item, dir){
+  const out = await exportBlob(item);
+  let name = out.name;
+  const size = await exists(dir, name);
+  if (size !== null){
+    if (size === out.blob.size) return 'already';
+    name = await uniqueName(dir, name);
+  }
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  try { await w.write(out.blob); } finally { await w.close(); }
+  return 'copied';
+}
+
+async function saveAll(){
+  // Where to save: the folder you chose, or ask now. This has to happen first,
+  // straight from the button click, or the browser won't show the folder picker.
+  let dest = state.sourceDir;
+  if (!dest){
+    try {
+      dest = await window.showDirectoryPicker({ mode: 'readwrite', id: 'photo-sorter-out' });
+    } catch (e){
+      if (e && e.name === 'AbortError') return;
+      openPanel('finish', [
+        el('h2', { text: 'Could not use that folder' }),
+        el('p', { text: 'Chrome may not allow top-level folders like Downloads, Documents, or Desktop. Pick or make a regular folder inside one of them.' }),
+        el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Back', onclick: openFinish }))
+      ]);
+      return;
+    }
+  }
+
+  state.saving = true;
+  const bar = el('div');
+  const status = el('p', { text: 'Starting…' });
+  state.panelKind = 'saving';
+  $('sheet').replaceChildren(
+    el('h2', { text: 'Saving your photos' }),
+    el('div', { class: 'bigbar' }, bar),
+    status
+  );
+
+  const jobs = [];
+  state.decisions.forEach((code, i) => {
+    if (!code || code === 'reject') return;
+    jobs.push({ i, folder: code === 'keep' ? 'Keep' : GRADE_FOLDERS[code] });
+  });
+
+  let copied = 0, already = 0, done = 0;
+  const failed = [];
+  try {
+    const outDir = await dest.getDirectoryHandle(outputFolderName(), { create: true });
+    const dirs = {};
+    for (const j of jobs){
+      if (!dirs[j.folder]) dirs[j.folder] = await outDir.getDirectoryHandle(j.folder, { create: true });
+    }
+    for (const j of jobs){
+      try {
+        const result = await copyOne(state.items[j.i], dirs[j.folder]);
+        if (result === 'copied') copied++; else already++;
+      } catch (err){
+        failed.push(`${state.items[j.i].name} (${err && err.message ? err.message : 'could not be saved'})`);
+      }
+      done++;
+      bar.style.width = (done / jobs.length * 100) + '%';
+      status.textContent = `Copied ${done} of ${jobs.length}`;
+    }
+  } catch (e){
+    state.saving = false;
+    openPanel('finish', [
+      el('h2', { text: 'Saving stopped' }),
+      el('p', { text: `Something went wrong after ${done} of ${jobs.length} photos: ${e && e.message ? e.message : e}. Photos already copied are safe, and you can press Save again to continue.` }),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn primary', type: 'button', text: 'Try again', onclick: openFinish }),
+        el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
+      )
+    ]);
+    return;
+  }
+
+  state.saving = false;
+  flushStore();
+  openPanel('done', [
+    el('h2', { text: 'Saved' }),
+    el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
+    failed.length ? el('p', { text: `${failed.length} could not be saved: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '; and more' : ''}.` }) : null,
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); resetToStart(); } }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
+    )
+  ]);
+}
+
+/* ---------- drag and drop ---------- */
+
+let dragDepth = 0;
+const hasFiles = e => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+
+function showDrag(on){
+  const sorting = state.mode === 'sort';
+  $('drop').classList.toggle('over', on && state.mode === 'start');
+  const veil = $('veil');
+  veil.hidden = !(on && sorting);
+  if (on && sorting) veil.textContent = 'Drop to add these photos';
+}
+
+function handleDrop(dt){
+  if (state.mode === 'panel' && state.panelKind !== 'finish') return;
+  const jobs = [];
+  const items = Array.from(dt.items || []);
+  // These calls have to start right now, before any waiting, or the browser empties the list.
+  if (items.length){
+    for (const it of items){
+      if (it.kind !== 'file') continue;
+      if (typeof it.getAsFileSystemHandle === 'function') jobs.push(Promise.resolve(it.getAsFileSystemHandle()).catch(() => null));
+      else { const f = it.getAsFile(); if (f) jobs.push(Promise.resolve(wrapFile(f))); }
+    }
+  } else {
+    for (const f of Array.from(dt.files || [])) jobs.push(Promise.resolve(wrapFile(f)));
+  }
+  Promise.all(jobs).then(hs => {
+    const handles = hs.filter(Boolean);
+    if (handles.length) ingest(handles, {});
+  });
+}
+
+function bindDrag(){
+  window.addEventListener('dragenter', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    showDrag(true);
+  });
+  window.addEventListener('dragover', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('dragleave', e => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) showDrag(false);
+  });
+  window.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    showDrag(false);
+    handleDrop(e.dataTransfer);
+  });
+}
+
+/* ---------- wiring ---------- */
+
+function bindSortControls(){
+  $('rejectBtn').addEventListener('click', e => { decide('reject'); e.currentTarget.blur(); });
+  $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
+  document.querySelectorAll('.grade').forEach(b => {
+    b.addEventListener('click', e => { decide(b.dataset.code); e.currentTarget.blur(); });
+  });
+  $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
+  $('finishBtn').addEventListener('click', openFinish);
+  $('endFinishBtn').addEventListener('click', openFinish);
+
+  $('photo').addEventListener('error', () => {
+    if (state.mode === 'sort' && state.index < state.items.length){
+      $('fname').textContent = state.items[state.index].name + ' (this photo can\'t be shown, you can still keep or reject it)';
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    const canUndo = state.mode === 'sort' || (state.mode === 'panel' && state.panelKind === 'finish');
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key || '').toLowerCase() === 'z'){
+      if (canUndo){ e.preventDefault(); if (!e.repeat) undo(); }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey || state.mode !== 'sort') return;
+
+    if (e.key === 'ArrowRight'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
+  });
+}
+
+initStart();
+bindSortControls();
+bindDrag();
+
+})();
+</script>
+</body>
+</html>
