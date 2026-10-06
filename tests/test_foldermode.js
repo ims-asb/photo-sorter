@@ -25,12 +25,12 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   let pickerCalls = 0;
   win.__picker = async () => { pickerCalls++; return root; };
   await sleep(30);
-  $('useGrades').checked = false;
+  $('tagsInput').value = '';
   $('chooseFolderBtn').click();
   await sleep(100);
   check('folder mode starts', !$('sort').hidden && $('eventTitle').textContent === 'Assembly');
   check('grades hidden when off', $('grades').hidden);
-  doc.querySelector('[data-code="g6"]').click();
+  (doc.querySelector('[data-code="g6"]') || {click(){}}).click();
   check('grade click ignored when off', $('count').textContent === '1 of 2');
   key('ArrowRight'); key('ArrowLeft');
   await sleep(30);

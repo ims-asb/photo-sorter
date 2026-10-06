@@ -43,7 +43,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   key('ArrowUp'); key('ArrowLeft'); await sleep(10);
   check('edit count is 2', $('nEdit').textContent === '2', $('nEdit').textContent);
   check('keep count includes flagged', $('nKeep').textContent === '2', $('nKeep').textContent);
-  check('7th count includes flagged', $('n7').textContent === '1');
+  check('7th count includes flagged', doc.querySelector('[data-code="g7"] .n').textContent === '1');
 
   // undo restores the flag on the photo being re-decided
   key('ArrowUp'); key('ArrowRight'); await sleep(10);

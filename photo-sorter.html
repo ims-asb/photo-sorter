@@ -76,7 +76,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #editBtn[aria-pressed=true] .n{color:var(--ink)}
 #grades{display:grid;gap:.4rem;justify-items:center}
 #grades .cap{font-size:.8rem;color:var(--muted)}
-#grades .row{display:flex;gap:.5rem}
+#grades .row{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
+.presets{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:.85rem}
+.presets .btn{padding:.3rem .7rem;font-size:.85rem}
+.hint{color:var(--muted)}
+.grade kbd{font:inherit;font-size:.75rem;opacity:.7}
 .grade{min-width:4.2rem;min-height:2.6rem;border-radius:8px;border:2px solid var(--grade);background:transparent;color:var(--grade);font-weight:700;display:inline-flex;gap:.45rem;align-items:center;justify-content:center;padding:0 .8rem}
 .grade .n{color:var(--muted);font-weight:500;font-size:.85rem}
 .grade:hover{background:var(--grade);color:var(--ink)}
@@ -151,12 +155,16 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
       <input id="eventInput" type="text" autocomplete="off" placeholder="For example: Spring Dance">
     </div>
 
-    <label class="check">
-      <input id="useGrades" type="checkbox" checked>
-      <span>Tag candids by grade
-        <small>Adds 6th, 7th, and 8th grade buttons. Turn this off for assemblies and other events.</small>
-      </span>
-    </label>
+    <div class="field">
+      <label for="tagsInput">Extra buttons for tagging candids (optional, separated by commas)</label>
+      <input id="tagsInput" type="text" autocomplete="off" placeholder="For example: Volleyball, Soccer, Cross country">
+      <div class="presets">Quick fill:
+        <button class="btn ghost" type="button" data-preset="grades">Grades</button>
+        <button class="btn ghost" type="button" data-preset="sports">Sports</button>
+        <button class="btn ghost" type="button" data-preset="none">None</button>
+      </div>
+      <small class="hint">Each one gets a button and a number key (1 to 8) and its own folder. Leave it empty for assemblies and other events.</small>
+    </div>
 
     <div id="startMsg" role="status" aria-live="polite"></div>
   </div>
@@ -184,11 +192,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
     <button id="rejectBtn" class="act" type="button"><kbd>←</kbd> Reject <span class="n num" id="nReject">0</span></button>
     <div id="center">
     <div id="grades">
-      <div class="cap">Keep and tag the grade</div>
-      <div class="row">
-        <button class="grade" type="button" data-code="g6">6th <span class="n num" id="n6">0</span></button>
-        <button class="grade" type="button" data-code="g7">7th <span class="n num" id="n7">0</span></button>
-        <button class="grade" type="button" data-code="g8">8th <span class="n num" id="n8">0</span></button>
+      <div class="cap">Keep and tag</div>
+      <div class="row" id="tagRow">
       </div>
     </div>
     <button id="editBtn" type="button" aria-pressed="false"><kbd>↑</kbd> Needs post processing <span class="n num" id="nEdit">0</span></button>
@@ -212,8 +217,13 @@ const RAW_EXT = /\.cr2$/i;                 // Canon RAW: we use the full-size JP
 const ZIP_EXT = /\.zip$/i;
 const KEEP_AS_IS = /\.(jpe?g|png)$/i;      // already JPG or PNG, saved untouched
 const CAMERA_ONLY = /\.(cr3|heic|heif|nef|arw|dng|tiff?)$/i;
-const GRADE_FOLDERS = {g6:'6th grade candids', g7:'7th grade candids', g8:'8th grade candids'};
-const LABELS = {keep:'Keep', reject:'Reject', g6:'6th grade', g7:'7th grade', g8:'8th grade'};
+const LEGACY_TAGS = {'6th grade candids':'g6', '7th grade candids':'g7', '8th grade candids':'g8'};
+const PRESETS = {
+  grades: '6th grade candids, 7th grade candids, 8th grade candids',
+  sports: 'Volleyball, Soccer, Cross country, Basketball',
+  none: ''
+};
+const MAX_TAGS = 8;
 const EDIT_FOLDER = 'Needs post processing';
 const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th grade and flag for editing
 const baseCode = d => d ? d.split('+')[0] : d;
@@ -227,9 +237,9 @@ const state = {
   sourceDir: null,  // writable folder, only when "Choose a folder" was used
   folderName: '',
   eventName: '',
-  useGrades: true,
+  tags: [],         // buttons for tagging: { code, label, folder }
   items: [],        // { key, name, size, mtime, handle }
-  decisions: [],    // null | 'keep' | 'reject' | 'g6' | 'g7' | 'g8', plus '+edit' on a keep or grade; one per photo
+  decisions: [],    // null | 'keep' | 'reject' | a tag code (like 'g6' or 't:Soccer'), plus '+edit' on a keep or tag; one per photo
   pendingEdit: false, // "Needs post processing" is switched on for the photo on screen
   index: 0,
   skippedCamera: 0,
@@ -251,7 +261,7 @@ function el(tag, attrs, ...kids){
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v);
   }
-  for (const kid of kids.flat()){
+  for (const kid of kids.flat(Infinity)){
     if (kid == null) continue;
     e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   }
@@ -264,6 +274,42 @@ function reducedMotion(){
 
 function safeName(s){
   return String(s).replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
+}
+
+/* "Soccer, Volleyball" -> buttons. A name ending in "candids" shows without it on the button. */
+function parseTags(text){
+  const out = [], seen = new Set();
+  for (const raw of String(text || '').split(',')){
+    const name = safeName(raw.replace(/\+/g, ' '));
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push({ code: LEGACY_TAGS[name.toLowerCase()] || 't:' + name, label: name.replace(/ candids$/i, ''), folder: name });
+    if (out.length === MAX_TAGS) break;
+  }
+  return out;
+}
+const tagFor = code => state.tags.find(t => t.code === code);
+function labelFor(code){
+  if (code === 'keep') return 'Keep';
+  if (code === 'reject') return 'Reject';
+  const t = tagFor(code);
+  return t ? t.label : code.replace(/^t:/, '');
+}
+function folderFor(code){
+  if (code === 'keep') return 'Keep';
+  const t = tagFor(code);
+  if (t) return t.folder;
+  for (const name in LEGACY_TAGS) if (LEGACY_TAGS[name] === code) return safeName(name);
+  return safeName(code.replace(/^t:/, ''));
+}
+
+function buildTagButtons(){
+  const row = $('tagRow');
+  row.replaceChildren();
+  state.tags.forEach((t, i) => {
+    row.append(el('button', { class: 'grade', type: 'button', 'data-code': t.code, onclick: e => { decide(t.code); e.currentTarget.blur(); } },
+      el('kbd', { text: String(i + 1) }), ' ' + t.label + ' ', el('span', { class: 'n num', text: '0' })));
+  });
 }
 
 function readJSON(key){
@@ -543,7 +589,11 @@ function setBusy(busy){
 
 function initStart(){
   const s = readJSON(SETTINGS_KEY);
-  if (s && typeof s.useGrades === 'boolean') $('useGrades').checked = s.useGrades;
+  $('tagsInput').value = s && typeof s.tags === 'string' ? s.tags
+                       : s && s.useGrades === false ? PRESETS.none : PRESETS.grades;
+  document.querySelectorAll('[data-preset]').forEach(b => {
+    b.addEventListener('click', () => { $('tagsInput').value = PRESETS[b.dataset.preset]; });
+  });
 
   if (typeof window.showDirectoryPicker !== 'function'){
     setBusy(true);
@@ -703,8 +753,8 @@ async function ingest(handles, opts){
   const typedName = $('eventInput').value.trim();
   state.eventName = typedName || (opts.folder ? opts.folder.name
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
-  state.useGrades = $('useGrades').checked;
-  writeJSON(SETTINGS_KEY, { useGrades: state.useGrades });
+  state.tags = parseTags($('tagsInput').value);
+  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value });
 
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
@@ -775,6 +825,7 @@ function resetToStart(){
   state.index = 0;
   state.sourceDir = null;
   state.pendingEdit = false;
+  state.tags = [];
   $('eventInput').value = '';
   clearCache();
   $('photo').removeAttribute('src');
@@ -852,17 +903,18 @@ function beginSorting(startAt){
   $('start').hidden = true;
   $('sort').hidden = false;
   $('eventTitle').textContent = state.eventName;
-  $('grades').hidden = !state.useGrades;
+  buildTagButtons();
+  $('grades').hidden = !state.tags.length;
   setNote(noteText());
   render();
   if (state.index >= state.items.length) openFinish();
 }
 
 function tally(){
-  const t = { keep: 0, reject: 0, g6: 0, g7: 0, g8: 0, edit: 0 };
+  const t = { keep: 0, reject: 0, edit: 0 };
   for (const d of state.decisions){
     const b = baseCode(d);
-    if (b && t[b] !== undefined) t[b]++;
+    if (b) t[b] = (t[b] || 0) + 1;
     if (isEdit(d)) t.edit++;
   }
   return t;
@@ -877,9 +929,7 @@ function render(){
   $('progressFill').style.width = (n ? (state.index / n) * 100 : 0) + '%';
   $('nReject').textContent = t.reject;
   $('nKeep').textContent = t.keep;
-  $('n6').textContent = t.g6;
-  $('n7').textContent = t.g7;
-  $('n8').textContent = t.g8;
+  document.querySelectorAll('#tagRow .grade').forEach(b => { b.querySelector('.n').textContent = t[b.dataset.code] || 0; });
   $('nEdit').textContent = t.edit;
   $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
   $('undoBtn').disabled = state.index === 0;
@@ -893,7 +943,7 @@ function render(){
 
 function decide(code){
   if (state.mode !== 'sort' || state.index >= state.items.length) return;
-  if (!state.useGrades && code.startsWith('g')) return;
+  if (code !== 'keep' && code !== 'reject' && !tagFor(code)) return;
 
   const full = state.pendingEdit && code !== 'reject' ? code + EDIT_SUFFIX : code;
   flyOff(full);
@@ -943,7 +993,7 @@ function flyOff(code){
   const copy = el('img', { alt: '' });
   copy.src = img.src;
   const kind = code === 'keep' ? 'keep' : code === 'reject' ? 'reject' : 'grade';
-  fly.append(copy, el('div', { class: 'tag tag-' + kind, text: LABELS[code] + (edit ? ' + edit' : '') }));
+  fly.append(copy, el('div', { class: 'tag tag-' + kind, text: labelFor(code) + (edit ? ' + edit' : '') }));
   document.body.append(fly);
   const gone = () => fly.remove();
   fly.addEventListener('animationend', gone);
@@ -986,11 +1036,11 @@ function openFinish(){
     ['Kept', t.keep],
     ['Rejected', t.reject]
   ];
-  if (state.useGrades) rows.splice(1, 0, ['6th grade', t.g6], ['7th grade', t.g7], ['8th grade', t.g8]);
+  rows.splice(1, 0, ...state.tags.map(g => [g.label, t[g.code] || 0]));
   if (t.edit > 0) rows.push(['Needs post processing (also counted above)', t.edit]);
   if (unsorted > 0) rows.push(['Not sorted yet', unsorted]);
 
-  const toCopy = t.keep + t.g6 + t.g7 + t.g8;
+  const toCopy = sorted - t.reject;
 
   const where = el('p');
   const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
@@ -1090,7 +1140,7 @@ async function saveAll(){
   state.decisions.forEach((code, i) => {
     const b = baseCode(code);
     if (!b || b === 'reject') return;
-    jobs.push({ i, folder: b === 'keep' ? 'Keep' : GRADE_FOLDERS[b], edit: isEdit(code) });
+    jobs.push({ i, folder: folderFor(b), edit: isEdit(code) });
   });
 
   let copied = 0, already = 0, done = 0;
@@ -1207,9 +1257,6 @@ function bindDrag(){
 function bindSortControls(){
   $('rejectBtn').addEventListener('click', e => { decide('reject'); e.currentTarget.blur(); });
   $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
-  document.querySelectorAll('.grade').forEach(b => {
-    b.addEventListener('click', e => { decide(b.dataset.code); e.currentTarget.blur(); });
-  });
   $('editBtn').addEventListener('click', e => { toggleEdit(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
@@ -1234,6 +1281,7 @@ function bindSortControls(){
 
     if (e.key === 'ArrowRight'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
+    else if (/^[1-8]$/.test(e.key) && state.tags[+e.key - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[+e.key - 1].code); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) toggleEdit(); }
   });
 }

@@ -52,5 +52,12 @@ node test_dragdrop.js
 node test_foldermode.js
 node test_zip_cr2.js
 node test_edit.js
+node test_tags.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../photo-sorter.html` and mock the File System Access API. A real-browser check is still needed (see gap 1 and 2).
+
+## Custom tag buttons (built)
+- The start screen has a field for tag buttons, comma separated (default is the three grade names; Grades, Sports and None quick-fill chips). Up to 8. Each gets a button, number key 1 to 8, and a folder named as typed. A trailing "candids" is hidden on the button label.
+- Decision codes are `g6/g7/g8` for the default grade names, otherwise `t:<name>`. The `+edit` flag works on any of them. The tag list is remembered in localStorage.
+- Fixed an old bug: the finish panel summary showed "[object HTMLElement]" because `el()` only flattened children one level.
+- Checked in real Chromium with screenshots (JPGs, not CR2).
