@@ -6,7 +6,7 @@ A single-file, local browser tool ("Tinder for photos") that Luke (ASB Treasurer
 Success test still to do: Luke sorts about 50 photos by hand in OneDrive (timed), then the same 50 in this tool (timed). The tool only earns its place if it is clearly faster or easier.
 
 ## Files
-- `photo-sorter.html`: the whole app. Vanilla JS in one IIFE, inline CSS, no dependencies.
+- `index.html`: the whole app. Vanilla JS in one IIFE, inline CSS, no dependencies.
 - `tests/`: jsdom smoke tests plus a fixture generator (see "Running the tests").
 
 ## How it works
@@ -54,7 +54,7 @@ node test_zip_cr2.js
 node test_edit.js
 node test_tags.js
 ```
-Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../photo-sorter.html` and mock the File System Access API. A real-browser check is still needed (see gap 1 and 2).
+Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. A real-browser check is still needed (see gap 1 and 2).
 
 ## Custom tag buttons (built)
 - The start screen has a field for tag buttons, comma separated (default is the three grade names; Grades, Sports and None quick-fill chips). Up to 8. Each gets a button, number key 1 to 8, and a folder named as typed. A trailing "candids" is hidden on the button label.

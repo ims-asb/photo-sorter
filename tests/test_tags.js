@@ -4,7 +4,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
 const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; console.log('FAIL', l, x === undefined ? '' : x); } };
 (async () => {
-  const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','photo-sorter.html'), {
+  const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
     beforeParse(win){
       win.URL.createObjectURL = () => 'blob:x'; win.URL.revokeObjectURL = () => {};

@@ -9,7 +9,7 @@ const eq = (a, b) => a.length === b.length && Buffer.compare(Buffer.from(a), Buf
 
 (async () => {
   const urls = new Map();
-  const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','photo-sorter.html'), {
+  const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
     beforeParse(win){
       // real Blob/File/streams from Node so slice(), arrayBuffer(), stream() and unzipping work
