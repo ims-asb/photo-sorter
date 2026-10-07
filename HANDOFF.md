@@ -53,6 +53,7 @@ node test_foldermode.js
 node test_zip_cr2.js
 node test_edit.js
 node test_tags.js
+node test_undoall.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. A real-browser check is still needed (see gap 1 and 2).
 
@@ -61,3 +62,6 @@ Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html
 - Decision codes are `g6/g7/g8` for the default grade names, otherwise `t:<name>`. The `+edit` flag works on any of them. The tag list is remembered in localStorage.
 - Fixed an old bug: the finish panel summary showed "[object HTMLElement]" because `el()` only flattened children one level.
 - Checked in real Chromium with screenshots (JPGs, not CR2).
+
+## Undo all (built)
+- "Undo all" button in the top bar. It asks first (Cancel is focused), then clears every choice, resets to photo 1, and clears the saved decisions. Already-saved folders are untouched. Disabled when nothing is sorted. Test: `node test_undoall.js`.

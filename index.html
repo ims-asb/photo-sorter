@@ -177,6 +177,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
     <div id="note"></div>
     <div class="spacer"></div>
     <button id="undoBtn" class="btn ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="undoAllBtn" class="btn ghost" type="button" title="Undo every choice and start again from photo 1">Undo all</button>
     <button id="finishBtn" class="btn" type="button">Finish and save</button>
   </header>
   <div id="progress"><div id="progressFill"></div></div>
@@ -933,6 +934,7 @@ function render(){
   $('nEdit').textContent = t.edit;
   $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
   $('undoBtn').disabled = state.index === 0;
+  $('undoAllBtn').disabled = !state.decisions.some(Boolean);
 
   $('endMsg').hidden = !atEnd;
   $('photo').hidden = atEnd;
@@ -954,6 +956,32 @@ function decide(code){
   state.index++;
   render();
   if (state.index >= state.items.length) openFinish();
+}
+
+function undoAllAsk(){
+  if (state.mode !== 'sort' || state.saving) return;
+  const n = state.decisions.filter(Boolean).length;
+  if (!n) return;
+  openPanel('undoall', [
+    el('h2', { text: `Undo all ${n} choice${n === 1 ? '' : 's'}?` }),
+    el('p', { text: 'Every photo goes back to not sorted and you start again from photo 1. Photos you already saved to a folder are not touched.' }),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Undo all', onclick: undoAll }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: closePanel })
+    )
+  ]);
+  const cancel = $('sheet').querySelector('button.ghost');
+  if (cancel) cancel.focus();
+}
+
+function undoAll(){
+  state.items.forEach(it => { delete store[it.key]; });
+  state.decisions = new Array(state.items.length).fill(null);
+  state.pendingEdit = false;
+  state.index = 0;
+  flushStore();
+  closePanel();
+  render();
 }
 
 function toggleEdit(){
@@ -1258,6 +1286,7 @@ function bindSortControls(){
   $('rejectBtn').addEventListener('click', e => { decide('reject'); e.currentTarget.blur(); });
   $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
   $('editBtn').addEventListener('click', e => { toggleEdit(); e.currentTarget.blur(); });
+  $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
   $('endFinishBtn').addEventListener('click', openFinish);
