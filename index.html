@@ -180,6 +180,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
     <div id="count" class="num"></div>
     <div id="note"></div>
     <div class="spacer"></div>
+    <button id="gotoBtn" class="btn ghost" type="button" title="Jump to a photo (G)">Go to</button>
     <button id="undoBtn" class="btn ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
     <button id="undoAllBtn" class="btn ghost" type="button" title="Undo every choice and start again from photo 1">Undo all</button>
     <button id="finishBtn" class="btn" type="button">Finish and save</button>
@@ -314,7 +315,7 @@ function buildHints(){
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
-  items.push(['Z', 'Zoom'], ['Ctrl+Z', 'Undo']);
+  items.push(['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
   $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
 }
 
@@ -994,6 +995,42 @@ function decide(code, edit){
   if (state.index >= state.items.length) openFinish();
 }
 
+function goTo(i){
+  const n = state.items.length;
+  state.index = Math.min(Math.max(0, i), n);
+  closePanel();
+  render();
+  if (state.index >= n) openFinish();
+}
+
+function openGoTo(){
+  if (state.mode !== 'sort' || state.saving) return;
+  const n = state.items.length;
+  const firstOpen = state.decisions.findIndex(d => !d);
+  const input = el('input', { type: 'text', id: 'gotoInput', inputmode: 'numeric', autocomplete: 'off', value: String(Math.min(state.index + 1, n)) });
+  const submit = () => {
+    const v = parseInt(input.value, 10);
+    if (!(v >= 1 && v <= n)){ input.select(); return; }
+    goTo(v - 1);
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); submit(); }
+    else if (e.key === 'Escape'){ e.preventDefault(); closePanel(); }
+  });
+  openPanel('goto', [
+    el('h2', { text: 'Go to a photo' }),
+    el('label', { for: 'gotoInput', text: `Photo number (1 to ${n})` }),
+    input,
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Go', onclick: submit }),
+      firstOpen >= 0 ? el('button', { class: 'btn ghost', type: 'button', text: `First not sorted (${firstOpen + 1})`, onclick: () => goTo(firstOpen) }) : null,
+      el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: closePanel })
+    )
+  ]);
+  input.focus();
+  input.select();
+}
+
 function undoAllAsk(){
   if (state.mode !== 'sort' || state.saving) return;
   const n = state.decisions.filter(Boolean).length;
@@ -1323,6 +1360,7 @@ function bindSortControls(){
   $('photo').addEventListener('click', e => { if (state.mode === 'sort') setZoom(!zoomed, e); });
   $('photo').addEventListener('mousemove', moveZoom);
   $('editBtn').addEventListener('click', e => { decide('keep', true); e.currentTarget.blur(); });
+  $('gotoBtn').addEventListener('click', e => { openGoTo(); e.currentTarget.blur(); });
   $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
@@ -1350,6 +1388,7 @@ function bindSortControls(){
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
+    else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
   });
 }

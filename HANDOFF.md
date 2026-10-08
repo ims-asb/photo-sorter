@@ -29,7 +29,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 ## How it works
 - **Input:** drag and drop (files, folders, zips), "Choose photos", or "Choose a folder". Chrome or Edge on a computer only (File System Access API).
 - **Start screen:** asks "What photos are these for?" (names the sorted folder, blank falls back to "Photos <date>" or the folder name) and has a box for extra tag buttons (see below).
-- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = keep and flag "Needs post processing" in one press, Shift+1 to 8 = tag and flag, Z = zoom, Esc = zoom out, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
+- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = keep and flag "Needs post processing" in one press, Shift+1 to 8 = tag and flag, Z = zoom, Esc = zoom out, G = go to a photo, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
 - **Order:** by file modified time, then natural filename sort.
 - **Decision codes:** `keep`, `reject`, a tag code, plus an optional `+edit` suffix on a keep or tag (for example `g6+edit`, `t:Soccer+edit`). Stored in localStorage key `photosorter:v2:decisions`, keyed per photo (`name|size|mtime`, zips use `zipname!path|size|mtime`), written with a 250 ms debounce. Dropping the same photos again offers to resume. Tag list is remembered in `photosorter:v1:settings`.
 - **More photos while sorting:** drop onto the sort screen. They append, duplicates are ignored.
@@ -50,6 +50,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 6. **Key hints line:** under the buttons, built from the current tag list. Test: in `test_tags.js`.
 7. **Bug fixed:** the finish panel summary showed "[object HTMLElement]" because the `el()` helper only flattened children one level. It now flattens fully. This bug was in the original app.
 8. **Renamed** `photo-sorter.html` to `index.html` for GitHub Pages.
+9. **Go to a photo:** G key or the "Go to" button in the top bar opens a box. Type a photo number and press Enter, or click "First not sorted (N)". Out-of-range numbers keep the box open. Decisions already made are kept. Test: `test_goto.js`.
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.
@@ -64,11 +65,10 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 
 ## Ideas not built (priority order, none requested yet)
 1. Combine two people's results into one sorted folder. Today two people can each sort their own photos on their own computers. Two tabs on one computer share saved progress, and the last write can erase the other's choices, so avoid that. Splitting one batch needs manual merging in OneDrive.
-2. Jump to a photo or to the first unsorted photo.
-3. A one-page how-to for other ASB members.
-4. Auto-grouping photos into events by date and time.
-5. A "maybe" key (probably unnecessary now that the flag exists).
-6. **AI sport suggestions.** Discussed at length, deferred. If it ever comes back: it must run fully in the browser on the computer (a small image model, roughly 50 to 150 MB), only suggest and never auto-move, and needs legal sign-off first. The model would load in the background so sorting starts at once. Accuracy cannot be checked by looking at Luke's photos. A test page that Luke runs himself on folders already sorted by sport would measure accuracy and speed. Drop it if accuracy is under about 95%. Laptops: Precision 3680 (i7-14700, 16 GB) is comfortable. Latitude 3310 (2019, basic graphics) would be slow, and its RAM is unconfirmed. Also unknown: whether school computers wipe the browser on logout (Luke was given a two-step test), which would force re-downloading the model each day.
+2. A one-page how-to for other ASB members.
+3. Auto-grouping photos into events by date and time.
+4. A "maybe" key (probably unnecessary now that the flag exists).
+5. **AI sport suggestions.** Discussed at length, deferred. If it ever comes back: it must run fully in the browser on the computer (a small image model, roughly 50 to 150 MB), only suggest and never auto-move, and needs legal sign-off first. The model would load in the background so sorting starts at once. Accuracy cannot be checked by looking at Luke's photos. A test page that Luke runs himself on folders already sorted by sport would measure accuracy and speed. Drop it if accuracy is under about 95%. Laptops: Precision 3680 (i7-14700, 16 GB) is comfortable. Latitude 3310 (2019, basic graphics) would be slow, and its RAM is unconfirmed. Also unknown: whether school computers wipe the browser on logout (Luke was given a two-step test), which would force re-downloading the model each day.
 
 ## Known gaps and things to verify
 1. **Never run against a real CR2.** Tests use synthetic CR2 files. Luke shoots JPG now, but if CR2 comes back, check preview size, portrait orientation, and RAW+JPEG pairs on the 5D Mark III, 5D Mark I, and Rebel T6/T7.
@@ -98,6 +98,7 @@ node test_zip_cr2.js
 node test_edit.js
 node test_tags.js
 node test_undoall.js
+node test_goto.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. `tests/fx/` and `node_modules/` are git-ignored.
 
