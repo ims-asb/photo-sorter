@@ -5,7 +5,7 @@ Read this first. It covers what the app is, everything built so far, the current
 ## What this is
 A single-file, local browser tool ("Tinder for photos") that Luke (ASB Treasurer, Issaquah Middle School) uses to cull event photos for Quah/ASB and the yearbook. Photos stay on the computer. Nothing is uploaded and there are no network calls (checked: `index.html` has no URLs, fetch, external scripts, or fonts). Keep it that way. The photos show students, and the district only allows Microsoft-approved tools for anything identifying them.
 
-Approval status: Mz. Weed approved a test run. She also sent the question to admin, who sent it to legal. No answer yet. Until legal replies, everything must stay 100% local. No AI services, no uploads, nothing sent to Claude or any outside service, and do not ask Luke for student photos.
+Approval status: Mz. Weed approved a test run. She also sent the question to admin, who sent it to legal. No answer yet. Until legal replies, everything must stay 100% local. No AI of any kind (Mz. Weed rejected the AI sport sorter), no uploads, nothing sent to Claude or any outside service, and do not ask Luke for student photos.
 
 ## Where things live
 - Repo: `ims-asb/photo-sorter` (public, owned by the personal account `ims-asb`). Default branch `main`.
@@ -57,7 +57,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 - Keep the GitHub Pages site on for convenience. Nothing about photos goes to GitHub.
 - Ask "What photos are these for?" on the start screen rather than automatic folders.
 - Save into a folder inside the OneDrive sync folder. No direct OneDrive connection, and none is wanted. OneDrive's own approved sync uploads the files.
-- No AI sorter for now (see "Ideas not built").
+- No AI of any kind. Mz. Weed said no to the AI sport sorter.
 
 ## Test results so far
 - Luke's friend sorted 50 photos in the tool in 1:10 (about 1.4 s per photo). The OneDrive control run is not done yet. Success test: the tool is clearly faster or easier than sorting the same kind of 50 photos by hand in OneDrive, with the same stopping point (folders exist), the same tags, and fresh photos for each run.
@@ -68,7 +68,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 2. A one-page how-to for other ASB members.
 3. Auto-grouping photos into events by date and time.
 4. A "maybe" key (probably unnecessary now that the flag exists).
-5. **AI sport suggestions.** Discussed at length, deferred. If it ever comes back: it must run fully in the browser on the computer (a small image model, roughly 50 to 150 MB), only suggest and never auto-move, and needs legal sign-off first. The model would load in the background so sorting starts at once. Accuracy cannot be checked by looking at Luke's photos. A test page that Luke runs himself on folders already sorted by sport would measure accuracy and speed. Drop it if accuracy is under about 95%. Laptops: Precision 3680 (i7-14700, 16 GB) is comfortable. Latitude 3310 (2019, basic graphics) would be slow, and its RAM is unconfirmed. Also unknown: whether school computers wipe the browser on logout (Luke was given a two-step test), which would force re-downloading the model each day.
+5. **AI sport suggestions: REJECTED.** Mz. Weed said no. Do not build it, do not bring it up again, and do not add any AI model, model download, or outside service to this tool. Speed ideas that need no AI are preferred (see the list above, for example repeat last choice or grouping by time).
 
 ## Known gaps and things to verify
 1. **Never run against a real CR2.** Tests use synthetic CR2 files. Luke shoots JPG now, but if CR2 comes back, check preview size, portrait orientation, and RAW+JPEG pairs on the 5D Mark III, 5D Mark I, and Rebel T6/T7.
