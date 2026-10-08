@@ -54,6 +54,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 10. **Repeat last choice:** Space gives this photo the same decision as the last one, including its tag and the post-processing flag (a reject repeats too). Undo makes "last" the photo before. Ignored if nothing has been decided yet. Test: `test_repeat_sort.js`.
 11. **Sort order:** start screen dropdown, "When they were taken (file date)" (default) or "File name". Remembered. Test: `test_repeat_sort.js`.
 12. **Events by time gaps:** start screen box "Start a new event when photos are more than this many minutes apart (0 = never)", default 60, remembered, only used when sorting by date. While sorting, a ribbon shows "Event 2 of 3 (Oct 1, 5:30 PM)" and says "New event starts here" on an event's first photo. The finish panel asks for a name per event (default "<name> - event N") and saves each event into its own `<name> - sorted/` folder with the usual Keep, tag, and Needs post processing folders. One event (or gap 0) behaves exactly as before. Test: `test_events.js`.
+13. **Combine sorted folders:** button at the bottom of the start screen. The panel lets you add two or more sorted folders (read-only picker, one pick per click, duplicates refused), name the result (default "Combined - sorted"), then pick where it goes. Everything is copied in with subfolders merged (Keep, tag folders, Needs post processing). Same name and same size is skipped, same name with a different size becomes "name (2)". Hidden files, desktop.ini and Thumbs.db are skipped. Sources are never changed. It refuses to merge into one of its own sources. This is how two people sort at once: each sorts their own photos on their own computer, then the folders are combined. It does not detect the same photo sorted differently by two people. Test: `test_combine.js` (mock folders only, the real directory picker was not exercised).
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.
@@ -67,7 +68,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 - Luke was going to try it in 5th period on real photos. No bug reports yet.
 
 ## Ideas not built (priority order, none requested yet)
-1. (Being built) Combine two people's results into one sorted folder. Today two people can each sort their own photos on their own computers. Two tabs on one computer share saved progress, and the last write can erase the other's choices, so avoid that. Splitting one batch needs manual merging in OneDrive.
+1. Detect the same photo sorted differently by two people when combining (today it just keeps both). Two tabs on one computer still share saved progress and the last write can erase the other's choices, so avoid that.
 2. A one-page how-to for other ASB members.
 4. A "maybe" key (probably unnecessary now that the flag exists).
 5. **AI sport suggestions: REJECTED.** Mz. Weed said no. Do not build it, do not bring it up again, and do not add any AI model, model download, or outside service to this tool. Speed ideas that need no AI are preferred (see the list above, for example repeat last choice or grouping by time).
@@ -103,6 +104,7 @@ node test_undoall.js
 node test_goto.js
 node test_repeat_sort.js
 node test_events.js
+node test_combine.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. `tests/fx/` and `node_modules/` are git-ignored.
 

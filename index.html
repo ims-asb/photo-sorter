@@ -128,6 +128,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 .sheet dd{margin:0;text-align:right;font-weight:650}
 .sheet .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
 .sheet .small{font-size:.85rem}
+.sheet ul.folders{margin:.4rem 0 .8rem;padding-left:1.2rem;color:var(--text)}
 .bigbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:1rem 0 .5rem}
 .bigbar div{height:100%;width:0;background:var(--keep)}
 
@@ -185,6 +186,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
         <option value="time">When they were taken (file date)</option>
         <option value="name">File name</option>
       </select>
+    </div>
+
+    <div class="field">
+      <button id="combineBtn" class="btn ghost" type="button">Combine sorted folders from two people</button>
+      <small class="hint">Merge the sorted folders that two people made into one folder.</small>
     </div>
 
     <div id="startMsg" role="status" aria-live="polite"></div>
@@ -667,6 +673,7 @@ function setStartMsg(text, isError){
 function setBusy(busy){
   $('choosePhotosBtn').disabled = busy;
   $('chooseFolderBtn').disabled = busy;
+  $('combineBtn').disabled = busy;
 }
 
 function initStart(){
@@ -683,6 +690,7 @@ function initStart(){
     setBusy(true);
     setStartMsg('This tool needs Chrome or Edge on a computer. Open this file there to use it.', true);
   }
+  $('combineBtn').addEventListener('click', () => openCombine([]));
   $('chooseFolderBtn').addEventListener('click', chooseFolder);
   $('choosePhotosBtn').addEventListener('click', choosePhotos);
   $('fileInput').addEventListener('change', e => {
@@ -1379,6 +1387,126 @@ async function saveAll(){
       el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); resetToStart(); } }),
       el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
     )
+  ]);
+}
+
+/* ---------- combine sorted folders (two people, one result) ---------- */
+
+const SKIP_NAMES = /^(\.|desktop\.ini$|thumbs\.db$)/i;
+
+async function sameFolder(a, b){
+  try { return a.isSameEntry ? await a.isSameEntry(b) : a === b; } catch (e) { return a === b; }
+}
+
+async function countFiles(dir){
+  let n = 0;
+  for await (const [name, h] of dir.entries()){
+    if (SKIP_NAMES.test(name)) continue;
+    n += h.kind === 'directory' ? await countFiles(h) : 1;
+  }
+  return n;
+}
+
+// Copies everything from src into dst, keeping subfolders. A file that is already there with the
+// same name and size is skipped. Same name but different size is kept as "name (2)".
+async function copyTree(src, dst, stats, tick){
+  for await (const [name, h] of src.entries()){
+    if (SKIP_NAMES.test(name)) continue;
+    if (h.kind === 'directory'){
+      await copyTree(h, await dst.getDirectoryHandle(name, { create: true }), stats, tick);
+      continue;
+    }
+    try {
+      const f = await h.getFile();
+      let target = name;
+      const size = await exists(dst, target);
+      if (size !== null){
+        if (size === f.size){ stats.already++; tick(); continue; }
+        target = await uniqueName(dst, target);
+      }
+      const fh = await dst.getFileHandle(target, { create: true });
+      const w = await fh.createWritable();
+      try { await w.write(f); } finally { await w.close(); }
+      stats.copied++;
+    } catch (err){
+      stats.failed.push(`${name} (${err && err.message ? err.message : 'could not be copied'})`);
+    }
+    tick();
+  }
+}
+
+function openCombine(list, name, message){
+  const nameInput = el('input', { type: 'text', id: 'combineName', autocomplete: 'off', value: name || 'Combined - sorted' });
+  const keepName = () => nameInput.value;
+  const add = async () => {
+    const typed = keepName();
+    let h;
+    try { h = await window.showDirectoryPicker({ mode: 'read', id: 'photo-sorter-combine' }); }
+    catch (e){
+      if (e && e.name === 'AbortError') return;
+      openCombine(list, typed, 'Could not open that folder. Pick a regular folder, not a top-level one like Documents.');
+      return;
+    }
+    for (const x of list) if (await sameFolder(x, h)){ openCombine(list, typed, `“${h.name}” is already in the list.`); return; }
+    openCombine(list.concat([h]), typed);
+  };
+  const go = async () => {
+    const typed = safeName(keepName()) || 'Combined - sorted';
+    let dest;
+    try { dest = await window.showDirectoryPicker({ mode: 'readwrite', id: 'photo-sorter-out' }); }
+    catch (e){
+      if (e && e.name === 'AbortError') return;
+      openCombine(list, typed, 'Could not use that folder. Pick or make a regular folder inside Documents, Desktop, or OneDrive.');
+      return;
+    }
+    combineRun(list, typed, dest);
+  };
+  openPanel('combine', [
+    el('h2', { text: 'Combine sorted folders' }),
+    el('p', { text: 'Pick the sorted folders that each person made, for example “Soccer - sorted” from two computers. They are copied into one new folder. The folders you pick are not changed or deleted.' }),
+    list.length ? el('ul', { class: 'folders' }, list.map(h => el('li', { text: h.name }))) : el('p', { class: 'small', text: 'No folders picked yet.' }),
+    message ? el('p', { class: 'small', text: message }) : null,
+    el('label', { for: 'combineName', text: 'Name for the combined folder' }),
+    nameInput,
+    el('div', { class: 'row' },
+      el('button', { class: 'btn ghost', type: 'button', text: list.length ? 'Add another folder' : 'Add a folder', onclick: add }),
+      el('button', { class: 'btn primary', type: 'button', text: 'Choose where to put it and combine', disabled: list.length < 2 ? 'disabled' : null, onclick: go }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: closePanel })
+    )
+  ]);
+}
+
+async function combineRun(list, name, dest){
+  state.panelKind = 'combining';
+  const status = el('p', { text: 'Starting…' });
+  const bar = el('div');
+  $('sheet').replaceChildren(el('h2', { text: 'Combining folders' }), el('div', { class: 'bigbar' }, bar), status);
+  const stats = { copied: 0, already: 0, failed: [] };
+  try {
+    const out = await dest.getDirectoryHandle(name, { create: true });
+    for (const src of list) if (await sameFolder(src, out)) throw new Error(`the new folder “${name}” is one of the folders you picked, choose a different name or place`);
+    let total = 0;
+    for (const src of list) total += await countFiles(src);
+    let done = 0;
+    const tick = () => {
+      done++;
+      bar.style.width = (total ? done / total * 100 : 100) + '%';
+      status.textContent = `Looked at ${done} of ${total} files`;
+    };
+    for (const src of list) await copyTree(src, out, stats, tick);
+  } catch (e){
+    openPanel('combine', [
+      el('h2', { text: 'Combining stopped' }),
+      el('p', { text: `${e && e.message ? e.message : e}. Files already copied are safe, and you can combine again to continue.` }),
+      el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Back', onclick: () => openCombine(list, name) }))
+    ]);
+    return;
+  }
+  openPanel('combined', [
+    el('h2', { text: 'Combined' }),
+    el('p', { text: `${stats.copied} photo${stats.copied === 1 ? '' : 's'} copied into “${name}” inside “${dest.name}”${stats.already ? `, ${stats.already} already there` : ''}. Photos with the same name but different content were kept as “name (2)”.` }),
+    stats.failed.length ? el('p', { text: `${stats.failed.length} could not be copied: ${stats.failed.slice(0, 5).join('; ')}${stats.failed.length > 5 ? '; and more' : ''}.` }) : null,
+    el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Close', onclick: closePanel }))
   ]);
 }
 
