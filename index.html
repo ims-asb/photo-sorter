@@ -21,7 +21,7 @@
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text)}
 [hidden]{display:none !important}
-button,input{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 button:disabled{cursor:default;opacity:.45}
 button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
@@ -34,6 +34,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #start p{color:var(--muted);line-height:1.5;margin:0 0 1.5rem;max-width:32rem}
 .field{display:grid;gap:.4rem;margin-bottom:1.1rem}
 .field label{font-size:.9rem;color:var(--muted)}
+.field select{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%;color:inherit}
 .field input[type=text]{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%}
 .check{display:flex;gap:.6rem;align-items:flex-start;margin-bottom:1.5rem;line-height:1.35}
 .check input{margin-top:.2rem;width:1.1rem;height:1.1rem;accent-color:var(--grade)}
@@ -170,6 +171,14 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
       <small class="hint">Each one gets a button and a number key (1 to 8) and its own folder. Leave it empty for assemblies and other events.</small>
     </div>
 
+    <div class="field">
+      <label for="sortInput">Show the photos in this order</label>
+      <select id="sortInput">
+        <option value="time">When they were taken (file date)</option>
+        <option value="name">File name</option>
+      </select>
+    </div>
+
     <div id="startMsg" role="status" aria-live="polite"></div>
   </div>
 </main>
@@ -245,8 +254,10 @@ const state = {
   folderName: '',
   eventName: '',
   tags: [],         // buttons for tagging: { code, label, folder }
+  sortBy: 'time',   // time | name
   items: [],        // { key, name, size, mtime, handle }
   decisions: [],    // null | 'keep' | 'reject' | a tag code (like 'g6' or 't:Soccer'), plus '+edit' on a keep or tag; one per photo
+  lastChoice: null, // the most recent decision, for the Space key
   index: 0,
   skippedCamera: 0,
   pairsSkipped: 0,
@@ -315,7 +326,7 @@ function buildHints(){
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
-  items.push(['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
+  items.push(['Space', 'Same as last photo'], ['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
   $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
 }
 
@@ -630,6 +641,7 @@ function initStart(){
   const s = readJSON(SETTINGS_KEY);
   $('tagsInput').value = s && typeof s.tags === 'string' ? s.tags
                        : s && s.useGrades === false ? PRESETS.none : PRESETS.grades;
+  if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
   document.querySelectorAll('[data-preset]').forEach(b => {
     b.addEventListener('click', () => { $('tagsInput').value = PRESETS[b.dataset.preset]; });
   });
@@ -713,7 +725,7 @@ async function walk(h, out, depth){
   }
 }
 
-async function buildItems(handles, existingKeys){
+async function buildItems(handles, existingKeys, sortBy){
   const out = { files: [], skippedCamera: 0, badZips: [] };
   for (const h of handles) await walk(h, out, 0);
   const seen = new Set(existingKeys || []);
@@ -746,7 +758,8 @@ async function buildItems(handles, existingKeys){
     return true;
   });
 
-  items.sort((a, b) => (a.mtime - b.mtime) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  items.sort(sortBy === 'name' ? (a, b) => byName(a, b) || (a.mtime - b.mtime) : (a, b) => (a.mtime - b.mtime) || byName(a, b));
   return { items, skippedCamera: out.skippedCamera, pairsSkipped, badZips: out.badZips };
 }
 
@@ -772,7 +785,7 @@ async function ingest(handles, opts){
   setStartMsg('Reading photos…');
 
   let built;
-  try { built = await buildItems(handles, []); }
+  try { built = await buildItems(handles, [], $('sortInput').value); }
   catch (e){
     setBusy(false);
     setStartMsg('Could not read those photos: ' + (e && e.message ? e.message : e), true);
@@ -793,7 +806,8 @@ async function ingest(handles, opts){
   state.eventName = typedName || (opts.folder ? opts.folder.name
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
-  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value });
+  state.sortBy = $('sortInput').value;
+  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value, sort: state.sortBy });
 
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
@@ -815,7 +829,7 @@ async function ingest(handles, opts){
 /* Photos dropped or chosen while sorting go on the end. */
 async function addMore(handles){
   let built;
-  try { built = await buildItems(handles, state.items.map(i => i.key)); }
+  try { built = await buildItems(handles, state.items.map(i => i.key), state.sortBy); }
   catch (e){ return; }
   if (!built.items.length){
     setNote(built.badZips.length ? `Could not open: ${built.badZips.join('; ')}` : 'No new photos found in that drop');
@@ -862,6 +876,7 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
+  state.lastChoice = null;
   state.tags = [];
   $('eventInput').value = '';
   clearCache();
@@ -988,6 +1003,7 @@ function decide(code, edit){
   setZoom(false);
   flyOff(full);
   state.decisions[state.index] = full;
+  state.lastChoice = full;
   store[state.items[state.index].key] = full;
   persist();
   state.index++;
@@ -1050,6 +1066,7 @@ function undoAllAsk(){
 function undoAll(){
   state.items.forEach(it => { delete store[it.key]; });
   state.decisions = new Array(state.items.length).fill(null);
+  state.lastChoice = null;
   state.index = 0;
   flushStore();
   closePanel();
@@ -1066,9 +1083,14 @@ function undo(){
   setZoom(false);
   state.index--;
   state.decisions[state.index] = null;
+  state.lastChoice = (state.index > 0 && state.decisions[state.index - 1]) || null;
   delete store[state.items[state.index].key];
   persist();
   render();
+}
+
+function repeatLast(){
+  if (state.lastChoice) decide(baseCode(state.lastChoice), isEdit(state.lastChoice));
 }
 
 function flyOff(code){
@@ -1387,6 +1409,7 @@ function bindSortControls(){
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
+    else if (e.key === ' ' && tag !== 'BUTTON'){ e.preventDefault(); if (!e.repeat) repeatLast(); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }

@@ -29,7 +29,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 ## How it works
 - **Input:** drag and drop (files, folders, zips), "Choose photos", or "Choose a folder". Chrome or Edge on a computer only (File System Access API).
 - **Start screen:** asks "What photos are these for?" (names the sorted folder, blank falls back to "Photos <date>" or the folder name) and has a box for extra tag buttons (see below).
-- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = keep and flag "Needs post processing" in one press, Shift+1 to 8 = tag and flag, Z = zoom, Esc = zoom out, G = go to a photo, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
+- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = keep and flag "Needs post processing" in one press, Shift+1 to 8 = tag and flag, Space = same as last photo, Z = zoom, Esc = zoom out, G = go to a photo, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
 - **Order:** by file modified time, then natural filename sort.
 - **Decision codes:** `keep`, `reject`, a tag code, plus an optional `+edit` suffix on a keep or tag (for example `g6+edit`, `t:Soccer+edit`). Stored in localStorage key `photosorter:v2:decisions`, keyed per photo (`name|size|mtime`, zips use `zipname!path|size|mtime`), written with a 250 ms debounce. Dropping the same photos again offers to resume. Tag list is remembered in `photosorter:v1:settings`.
 - **More photos while sorting:** drop onto the sort screen. They append, duplicates are ignored.
@@ -51,6 +51,8 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 7. **Bug fixed:** the finish panel summary showed "[object HTMLElement]" because the `el()` helper only flattened children one level. It now flattens fully. This bug was in the original app.
 8. **Renamed** `photo-sorter.html` to `index.html` for GitHub Pages.
 9. **Go to a photo:** G key or the "Go to" button in the top bar opens a box. Type a photo number and press Enter, or click "First not sorted (N)". Out-of-range numbers keep the box open. Decisions already made are kept. Test: `test_goto.js`.
+10. **Repeat last choice:** Space gives this photo the same decision as the last one, including its tag and the post-processing flag (a reject repeats too). Undo makes "last" the photo before. Ignored if nothing has been decided yet. Test: `test_repeat_sort.js`.
+11. **Sort order:** start screen dropdown, "When they were taken (file date)" (default) or "File name". Remembered. Test: `test_repeat_sort.js`.
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.
@@ -64,7 +66,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 - Luke was going to try it in 5th period on real photos. No bug reports yet.
 
 ## Ideas not built (priority order, none requested yet)
-1. Combine two people's results into one sorted folder. Today two people can each sort their own photos on their own computers. Two tabs on one computer share saved progress, and the last write can erase the other's choices, so avoid that. Splitting one batch needs manual merging in OneDrive.
+1. (Being built) Combine two people's results into one sorted folder. Today two people can each sort their own photos on their own computers. Two tabs on one computer share saved progress, and the last write can erase the other's choices, so avoid that. Splitting one batch needs manual merging in OneDrive.
 2. A one-page how-to for other ASB members.
 3. Auto-grouping photos into events by date and time.
 4. A "maybe" key (probably unnecessary now that the flag exists).
@@ -99,6 +101,7 @@ node test_edit.js
 node test_tags.js
 node test_undoall.js
 node test_goto.js
+node test_repeat_sort.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. `tests/fx/` and `node_modules/` are git-ignored.
 
