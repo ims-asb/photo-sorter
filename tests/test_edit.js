@@ -34,27 +34,26 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('typed event name is used', $('eventTitle').textContent === 'Spring Dance', $('eventTitle').textContent);
 
   // a: edit + keep, b: keep, c: edit + 7th, d: edit then reject (flag ignored), e: undo test
-  key('ArrowUp'); check('flag turns on', $('editBtn').getAttribute('aria-pressed') === 'true');
-  key('ArrowRight'); await sleep(10);
-  check('flag resets after a decision', $('editBtn').getAttribute('aria-pressed') === 'false');
-  key('ArrowRight'); await sleep(10);
-  key('ArrowUp'); doc.querySelector('[data-code="g7"]').click(); await sleep(10);
-  key('ArrowUp'); key('ArrowUp'); check('Up toggles off again', $('editBtn').getAttribute('aria-pressed') === 'false');
-  key('ArrowUp'); key('ArrowLeft'); await sleep(10);
+  key('ArrowUp'); await sleep(10);
+  check('one press of Up decides and flags', $('count').textContent === '2 of 5' && $('nEdit').textContent === '1', $('count').textContent + ' ' + $('nEdit').textContent);
+  key('ArrowRight'); await sleep(10);                      // b: plain keep
+  check('a plain keep is not flagged', $('nEdit').textContent === '1');
+  doc.querySelector('[data-code="g7"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true, shiftKey: true })); await sleep(10);  // c: 7th + edit
+  key('ArrowLeft'); await sleep(10);                       // d: reject
   check('edit count is 2', $('nEdit').textContent === '2', $('nEdit').textContent);
   check('keep count includes flagged', $('nKeep').textContent === '2', $('nKeep').textContent);
   check('7th count includes flagged', doc.querySelector('[data-code="g7"] .n').textContent === '1');
 
   // undo restores the flag on the photo being re-decided
-  key('ArrowUp'); key('ArrowRight'); await sleep(10);
+  key('ArrowUp'); await sleep(10);                         // e: keep + edit
   check('last photo flagged keep', $('nEdit').textContent === '3');
   await sleep(20);
   check('finish opens', /All photos sorted/.test($('sheet').textContent));
   check('finish lists post processing', /Needs post processing/.test($('sheet').textContent));
   doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
   await sleep(10);
-  check('undo brings the flag back', $('editBtn').getAttribute('aria-pressed') === 'true' && $('nEdit').textContent === '2');
-  key('ArrowRight'); await sleep(20);
+  check('undo removes the flag with the decision', $('nEdit').textContent === '2' && $('count').textContent === '5 of 5', $('nEdit').textContent + ' ' + $('count').textContent);
+  key('ArrowUp'); await sleep(20);
 
   btn(/Save sorted/).click();
   await sleep(300);

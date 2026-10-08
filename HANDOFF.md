@@ -29,7 +29,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 ## How it works
 - **Input:** drag and drop (files, folders, zips), "Choose photos", or "Choose a folder". Chrome or Edge on a computer only (File System Access API).
 - **Start screen:** asks "What photos are these for?" (names the sorted folder, blank falls back to "Photos <date>" or the folder name) and has a box for extra tag buttons (see below).
-- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = flag "Needs post processing", Z = zoom, Esc = zoom out, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
+- **Keys:** Right arrow = keep, Left arrow = reject, 1 to 8 = keep and tag with that button, Up arrow = keep and flag "Needs post processing" in one press, Shift+1 to 8 = tag and flag, Z = zoom, Esc = zoom out, Ctrl+Z = undo (repeatable). Buttons do the same. Held keys are ignored. Reduced motion is respected. A line of key hints under the buttons always lists the keys, with the tag range (1-N) for the current event.
 - **Order:** by file modified time, then natural filename sort.
 - **Decision codes:** `keep`, `reject`, a tag code, plus an optional `+edit` suffix on a keep or tag (for example `g6+edit`, `t:Soccer+edit`). Stored in localStorage key `photosorter:v2:decisions`, keyed per photo (`name|size|mtime`, zips use `zipname!path|size|mtime`), written with a 250 ms debounce. Dropping the same photos again offers to resume. Tag list is remembered in `photosorter:v1:settings`.
 - **More photos while sorting:** drop onto the sort screen. They append, duplicates are ignored.
@@ -42,7 +42,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 - **Skipped types:** HEIC, CR3, NEF, ARW, DNG, TIFF. The top bar counts them.
 
 ## Features built this round
-1. **Needs post processing:** Up arrow or the blue button flags the photo on screen. It is a toggle that combines with Keep or a tag (Luke chose "option B"). It resets after each decision, and Undo brings it back. A flagged reject just rejects. Counts are shown on the button and in the finish summary ("also counted above"). Test: `test_edit.js`.
+1. **Needs post processing:** one press. Up arrow (or clicking the blue button) keeps the photo and flags it, and moves on. To flag and tag at once, hold Shift with a number key (Shift+1 to Shift+8) or Shift+click a tag button. A flagged reject just rejects. Counts are shown on the button and in the finish summary ("also counted above"). Undo removes the decision and its flag together. Originally this was a toggle that needed a second key press, and Luke asked for one press (fixed). Test: `test_edit.js`.
 2. **Custom tag buttons:** one comma-separated field on the start screen. Quick-fill chips: Grades (the default), Sports (Volleyball, Soccer, Cross country, Basketball), None. Up to 8 tags. Each gets a button, a number key, and a folder named as typed. A trailing "candids" is hidden on the button label. `+` characters are stripped from names because `+` separates the edit flag. Default grade names map to legacy codes `g6/g7/g8`, everything else is `t:<name>`. Why: Luke's batches mix sports (volleyball and soccer on the same day). Test: `test_tags.js`.
 3. **Event name on the start screen:** "What photos are these for?" Test: covered in `test_edit.js` and `test_tags.js`.
 4. **Undo all:** button in the top bar. Asks first (Cancel is focused), clears every choice, resets to photo 1, clears saved decisions. Does not touch folders already saved. Disabled when nothing is sorted. Test: `test_undoall.js`.
@@ -52,7 +52,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 8. **Renamed** `photo-sorter.html` to `index.html` for GitHub Pages.
 
 ## Decisions Luke made (do not re-ask)
-- Needs post processing is a combinable flag (option B), not its own pile.
+- Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.
 - Keep the GitHub Pages site on for convenience. Nothing about photos goes to GitHub.
 - Ask "What photos are these for?" on the start screen rather than automatic folders.
 - Save into a folder inside the OneDrive sync folder. No direct OneDrive connection, and none is wanted. OneDrive's own approved sync uploads the files.

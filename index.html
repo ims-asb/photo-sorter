@@ -75,8 +75,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #editBtn{min-height:2.4rem;border-radius:8px;border:2px solid var(--edit);background:transparent;color:var(--edit);font-weight:700;display:inline-flex;gap:.5rem;align-items:center;padding:0 .9rem}
 #editBtn kbd{font:inherit;font-size:.8rem;padding:.05rem .4rem;border-radius:5px;background:rgba(255,255,255,.14)}
 #editBtn .n{color:var(--muted);font-weight:500;font-size:.85rem}
-#editBtn[aria-pressed=true]{background:var(--edit);color:var(--ink)}
-#editBtn[aria-pressed=true] .n{color:var(--ink)}
+#editBtn:hover{background:var(--edit);color:var(--ink)}
+#editBtn:hover .n{color:var(--ink)}
 #grades{display:grid;gap:.4rem;justify-items:center}
 #grades .cap{font-size:.8rem;color:var(--muted)}
 #grades .row{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
@@ -201,7 +201,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
       <div class="row" id="tagRow">
       </div>
     </div>
-    <button id="editBtn" type="button" aria-pressed="false"><kbd>↑</kbd> Needs post processing <span class="n num" id="nEdit">0</span></button>
+    <button id="editBtn" type="button" title="Keep this photo and flag it. Hold Shift with a number key to flag and tag it too."><kbd>↑</kbd> Needs post processing <span class="n num" id="nEdit">0</span></button>
     </div>
     <button id="keepBtn" class="act" type="button"><span class="n num" id="nKeep">0</span> Keep <kbd>→</kbd></button>
     <div id="hints"></div>
@@ -246,7 +246,6 @@ const state = {
   tags: [],         // buttons for tagging: { code, label, folder }
   items: [],        // { key, name, size, mtime, handle }
   decisions: [],    // null | 'keep' | 'reject' | a tag code (like 'g6' or 't:Soccer'), plus '+edit' on a keep or tag; one per photo
-  pendingEdit: false, // "Needs post processing" is switched on for the photo on screen
   index: 0,
   skippedCamera: 0,
   pairsSkipped: 0,
@@ -313,7 +312,9 @@ function buildHints(){
   const n = state.tags.length;
   const items = [['←', 'Reject'], ['→', 'Keep']];
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
-  items.push(['↑', 'Needs post processing'], ['Z', 'Zoom'], ['Ctrl+Z', 'Undo']);
+  items.push(['↑', 'Keep + needs post processing']);
+  if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
+  items.push(['Z', 'Zoom'], ['Ctrl+Z', 'Undo']);
   $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
 }
 
@@ -344,7 +345,7 @@ function buildTagButtons(){
   const row = $('tagRow');
   row.replaceChildren();
   state.tags.forEach((t, i) => {
-    row.append(el('button', { class: 'grade', type: 'button', 'data-code': t.code, onclick: e => { decide(t.code); e.currentTarget.blur(); } },
+    row.append(el('button', { class: 'grade', type: 'button', 'data-code': t.code, onclick: e => { decide(t.code, e.shiftKey); e.currentTarget.blur(); } },
       el('kbd', { text: String(i + 1) }), ' ' + t.label + ' ', el('span', { class: 'n num', text: '0' })));
   });
 }
@@ -799,7 +800,6 @@ async function ingest(handles, opts){
   state.badZips = built.badZips;
   state.decisions = built.items.map(it => store[it.key] || null);
   state.index = 0;
-  state.pendingEdit = false;
   setStartMsg('');
 
   const restored = state.decisions.filter(Boolean).length;
@@ -861,7 +861,6 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
-  state.pendingEdit = false;
   state.tags = [];
   $('eventInput').value = '';
   clearCache();
@@ -970,7 +969,6 @@ function render(){
   $('nKeep').textContent = t.keep;
   document.querySelectorAll('#tagRow .grade').forEach(b => { b.querySelector('.n').textContent = t[b.dataset.code] || 0; });
   $('nEdit').textContent = t.edit;
-  $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
   $('undoBtn').disabled = state.index === 0;
   $('undoAllBtn').disabled = !state.decisions.some(Boolean);
 
@@ -981,14 +979,13 @@ function render(){
   if (!atEnd) showPhoto(state.index);
 }
 
-function decide(code){
+function decide(code, edit){
   if (state.mode !== 'sort' || state.index >= state.items.length) return;
   if (code !== 'keep' && code !== 'reject' && !tagFor(code)) return;
 
-  const full = state.pendingEdit && code !== 'reject' ? code + EDIT_SUFFIX : code;
+  const full = edit && code !== 'reject' ? code + EDIT_SUFFIX : code;
   setZoom(false);
   flyOff(full);
-  state.pendingEdit = false;
   state.decisions[state.index] = full;
   store[state.items[state.index].key] = full;
   persist();
@@ -1016,17 +1013,10 @@ function undoAllAsk(){
 function undoAll(){
   state.items.forEach(it => { delete store[it.key]; });
   state.decisions = new Array(state.items.length).fill(null);
-  state.pendingEdit = false;
   state.index = 0;
   flushStore();
   closePanel();
   render();
-}
-
-function toggleEdit(){
-  if (state.mode !== 'sort' || state.index >= state.items.length) return;
-  state.pendingEdit = !state.pendingEdit;
-  $('editBtn').setAttribute('aria-pressed', String(state.pendingEdit));
 }
 
 function undo(){
@@ -1038,7 +1028,6 @@ function undo(){
   if (state.mode !== 'sort') return;
   setZoom(false);
   state.index--;
-  state.pendingEdit = isEdit(state.decisions[state.index]);
   state.decisions[state.index] = null;
   delete store[state.items[state.index].key];
   persist();
@@ -1322,12 +1311,18 @@ function bindDrag(){
 
 /* ---------- wiring ---------- */
 
+// 1 to 8 from the number row or the number pad. With Shift held the key is "!" or "@", so look at the key position.
+function tagNumber(e){
+  if (/^[1-8]$/.test(e.key)) return +e.key;
+  return /^(Digit|Numpad)[1-8]$/.test(e.code || '') ? +e.code.slice(-1) : 0;
+}
+
 function bindSortControls(){
   $('rejectBtn').addEventListener('click', e => { decide('reject'); e.currentTarget.blur(); });
   $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
   $('photo').addEventListener('click', e => { if (state.mode === 'sort') setZoom(!zoomed, e); });
   $('photo').addEventListener('mousemove', moveZoom);
-  $('editBtn').addEventListener('click', e => { toggleEdit(); e.currentTarget.blur(); });
+  $('editBtn').addEventListener('click', e => { decide('keep', true); e.currentTarget.blur(); });
   $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
@@ -1352,10 +1347,10 @@ function bindSortControls(){
 
     if (e.key === 'ArrowRight'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
-    else if (/^[1-8]$/.test(e.key) && state.tags[+e.key - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[+e.key - 1].code); }
+    else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
-    else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) toggleEdit(); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
   });
 }
 

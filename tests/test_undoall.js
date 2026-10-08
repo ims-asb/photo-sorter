@@ -16,7 +16,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   $('fileInput').dispatchEvent(new win.Event('change'));
   await sleep(150);
   check('disabled with nothing sorted', $('undoAllBtn').disabled);
-  key('ArrowRight'); key('ArrowLeft'); key('ArrowUp'); key('ArrowRight');
+  key('ArrowRight'); key('ArrowLeft'); key('ArrowUp');
   await sleep(20);
   check('enabled after sorting', !$('undoAllBtn').disabled);
   $('undoAllBtn').click(); await sleep(10);
