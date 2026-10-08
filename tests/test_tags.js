@@ -34,6 +34,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const btns = Array.from(doc.querySelectorAll('#tagRow .grade'));
   check('4 buttons, duplicate dropped, + removed', btns.length === 4 && /Track Field/.test(btns[3].textContent), btns.map(b => b.textContent).join('|'));
 
+  check('key hints list the tag range', /1-4/.test($('hints').textContent) && /Zoom/.test($('hints').textContent) && /Needs post processing/.test($('hints').textContent), $('hints').textContent);
   key('1');                                  // a: Volleyball
   key('2');                                  // b: Soccer
   key('ArrowUp'); key('2');                  // c: Soccer + edit

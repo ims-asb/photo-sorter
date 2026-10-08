@@ -65,3 +65,7 @@ Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html
 
 ## Undo all (built)
 - "Undo all" button in the top bar. It asks first (Cancel is focused), then clears every choice, resets to photo 1, and clears the saved decisions. Already-saved folders are untouched. Disabled when nothing is sorted. Test: `node test_undoall.js`.
+
+## Zoom and key hints (built)
+- Z or a click on the photo zooms to actual pixel size (at least 2x); the mouse moves the view. Z, Esc, or any new photo resets it. Checked in real Chromium. jsdom has no image sizes, so tests cover only the hints.
+- A line of key hints under the controls lists the keys, including the tag range (1-N) for the current event.

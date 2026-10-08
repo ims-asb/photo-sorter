@@ -54,8 +54,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #bar .btn{padding:.5rem .9rem;font-size:.9rem}
 #progress{height:3px;background:var(--line)}
 #progressFill{height:100%;width:0;background:var(--text);transition:width .15s}
-#stage{position:relative;min-height:0;padding:1rem}
-#photo{width:100%;height:100%;object-fit:contain;display:block}
+#stage{position:relative;min-height:0;padding:1rem;overflow:hidden}
+#photo{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in}
+#photo.zoomed{cursor:zoom-out}
+#hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
+#hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
 #fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
 #endMsg h2{margin:0;font-size:1.6rem}
@@ -126,7 +129,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 .bigbar div{height:100%;width:0;background:var(--keep)}
 
 @media (max-width:700px){
-  #controls{grid-template-columns:1fr 1fr;grid-template-areas:"grades grades" "reject keep"}
+  #controls{grid-template-columns:1fr 1fr;grid-template-areas:"grades grades" "reject keep" "hints hints"}
+  #hints{grid-area:hints}
   #center{grid-area:grades}
   #rejectBtn{grid-area:reject;justify-self:stretch;justify-content:center}
   #keepBtn{grid-area:keep;justify-self:stretch;justify-content:center}
@@ -200,6 +204,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
     <button id="editBtn" type="button" aria-pressed="false"><kbd>↑</kbd> Needs post processing <span class="n num" id="nEdit">0</span></button>
     </div>
     <button id="keepBtn" class="act" type="button"><span class="n num" id="nKeep">0</span> Keep <kbd>→</kbd></button>
+    <div id="hints"></div>
   </footer>
 </div>
 
@@ -302,6 +307,37 @@ function folderFor(code){
   if (t) return t.folder;
   for (const name in LEGACY_TAGS) if (LEGACY_TAGS[name] === code) return safeName(name);
   return safeName(code.replace(/^t:/, ''));
+}
+
+function buildHints(){
+  const n = state.tags.length;
+  const items = [['←', 'Reject'], ['→', 'Keep']];
+  if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
+  items.push(['↑', 'Needs post processing'], ['Z', 'Zoom'], ['Ctrl+Z', 'Undo']);
+  $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
+}
+
+let zoomed = false;
+function setZoom(on, evt){
+  const img = $('photo');
+  if (on && (!img.getAttribute('src') || !img.naturalWidth)) return;
+  zoomed = on;
+  img.classList.toggle('zoomed', on);
+  if (!on){ img.style.transform = ''; img.style.transformOrigin = ''; return; }
+  const box = img.getBoundingClientRect();
+  const fit = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+  img.dataset.scale = String(Math.max(2, 1 / fit));
+  moveZoom(evt);
+}
+function moveZoom(evt){
+  const img = $('photo');
+  if (!zoomed) return;
+  // the image box moves with the scale, so measure against the stage instead
+  const st = $('stage').getBoundingClientRect();
+  const x = evt ? (evt.clientX - st.left) / st.width : .5;
+  const y = evt ? (evt.clientY - st.top) / st.height : .5;
+  img.style.transformOrigin = `${Math.min(1, Math.max(0, x)) * 100}% ${Math.min(1, Math.max(0, y)) * 100}%`;
+  img.style.transform = `scale(${img.dataset.scale})`;
 }
 
 function buildTagButtons(){
@@ -880,6 +916,7 @@ function clearCache(){
 }
 
 async function showPhoto(i){
+  setZoom(false);
   const token = ++showToken;
   const e = ensureUrl(i);
   const url = await e.ready;
@@ -905,6 +942,7 @@ function beginSorting(startAt){
   $('sort').hidden = false;
   $('eventTitle').textContent = state.eventName;
   buildTagButtons();
+  buildHints();
   $('grades').hidden = !state.tags.length;
   setNote(noteText());
   render();
@@ -948,6 +986,7 @@ function decide(code){
   if (code !== 'keep' && code !== 'reject' && !tagFor(code)) return;
 
   const full = state.pendingEdit && code !== 'reject' ? code + EDIT_SUFFIX : code;
+  setZoom(false);
   flyOff(full);
   state.pendingEdit = false;
   state.decisions[state.index] = full;
@@ -997,6 +1036,7 @@ function undo(){
     closePanel();
   }
   if (state.mode !== 'sort') return;
+  setZoom(false);
   state.index--;
   state.pendingEdit = isEdit(state.decisions[state.index]);
   state.decisions[state.index] = null;
@@ -1285,6 +1325,8 @@ function bindDrag(){
 function bindSortControls(){
   $('rejectBtn').addEventListener('click', e => { decide('reject'); e.currentTarget.blur(); });
   $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
+  $('photo').addEventListener('click', e => { if (state.mode === 'sort') setZoom(!zoomed, e); });
+  $('photo').addEventListener('mousemove', moveZoom);
   $('editBtn').addEventListener('click', e => { toggleEdit(); e.currentTarget.blur(); });
   $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
   $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
@@ -1311,6 +1353,8 @@ function bindSortControls(){
     if (e.key === 'ArrowRight'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (/^[1-8]$/.test(e.key) && state.tags[+e.key - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[+e.key - 1].code); }
+    else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
+    else if (e.key === 'Escape' && zoomed){ setZoom(false); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) toggleEdit(); }
   });
 }
