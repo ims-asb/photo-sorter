@@ -152,6 +152,13 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <h1>Sort photos fast</h1>
     <p>Add your photos, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
 
+    <div id="continueCard" class="dropzone" hidden>
+      <h2 id="continueTitle"></h2>
+      <p class="dz-sub" id="continueSub"></p>
+      <button id="continueBtn" class="btn" type="button">Continue</button>
+      <button id="forgetBtn" class="btn ghost" type="button">Forget this</button>
+    </div>
+
     <div id="drop" class="dropzone">
       <div class="dz-title">Drop photos, folders, or zip files here</div>
       <p class="dz-sub">JPG, PNG, WebP, and Canon CR2 photos all work, and zip files are opened for you. Everything is saved as JPG or PNG. You can drop more at any time while you sort.</p>
@@ -208,6 +215,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <div id="count" class="num"></div>
     <div id="note"></div>
     <div class="spacer"></div>
+    <button id="addBtn" class="btn ghost" type="button" title="Add more photos to this batch">Add photos</button>
     <button id="gotoBtn" class="btn ghost" type="button" title="Jump to a photo (G)">Go to</button>
     <button id="undoBtn" class="btn ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
     <button id="undoAllBtn" class="btn ghost" type="button" title="Undo every choice and start again from photo 1">Undo all</button>
@@ -271,6 +279,8 @@ const DECISIONS_KEY = 'photosorter:v2:decisions';
 const $ = id => document.getElementById(id);
 
 const state = {
+  sourceHandles: [],  // real file and folder handles, kept so the next visit can pick up
+  tagsText: '',
   sourceDir: null,  // writable folder, only when "Choose a folder" was used
   folderName: '',
   eventName: '',
@@ -706,11 +716,83 @@ function initStart(){
   }
   $('chooseFolderBtn').addEventListener('click', chooseFolder);
   $('choosePhotosBtn').addEventListener('click', choosePhotos);
+  showContinueCard();
+  $('addBtn').addEventListener('click', choosePhotos);
   $('fileInput').addEventListener('change', e => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (files.length) ingest(files.map(wrapFile), {});
   });
+}
+
+
+/* ---------- remember the photos between visits (this browser only) ----------
+   Chrome lets a page keep "handles" to files and folders. We store only those
+   handles, not the photos. Next visit, one click and Chrome's permission prompt
+   brings them back. The photos must still be where they were. */
+
+const SESSION_DB = 'photosorter-session';
+function sessionDb(){
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('no indexedDB'));
+    const r = indexedDB.open(SESSION_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('s');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function sessionOp(mode, fn){
+  try {
+    const db = await sessionDb();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction('s', mode);
+      const req = fn(tx.objectStore('s'));
+      tx.oncomplete = () => { db.close(); res(req ? req.result : null); };
+      tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+    });
+  } catch (e){ return null; }
+}
+const sessionLoad = () => sessionOp('readonly', st => st.get('current'));
+const sessionClear = () => sessionOp('readwrite', st => st.delete('current'));
+const isRealHandle = h => !!h && typeof h.isSameEntry === 'function';
+
+function saveSession(){
+  if (state.round !== 1 || !state.sourceHandles.length) return;
+  sessionOp('readwrite', st => st.put({
+    handles: state.sourceHandles, isFolder: !!state.sourceDir,
+    eventName: state.eventName, tagsText: state.tagsText, sortBy: state.sortBy, savedAt: Date.now()
+  }, 'current'));
+}
+
+async function showContinueCard(){
+  const sess = await sessionLoad();
+  if (!sess || !Array.isArray(sess.handles) || !sess.handles.length) return;
+  $('continueTitle').textContent = `Continue “${sess.eventName || 'your photos'}”?`;
+  $('continueSub').textContent = 'You can pick up where you left off without adding the photos again. Chrome will ask permission once.';
+  $('continueCard').hidden = false;
+  $('forgetBtn').onclick = async () => { await sessionClear(); $('continueCard').hidden = true; };
+  $('continueBtn').onclick = async () => {
+    setBusy(true);
+    setStartMsg('Opening your photos…');
+    try {
+      for (const h of sess.handles){
+        const mode = (sess.isFolder && h.kind === 'directory') ? 'readwrite' : 'read';
+        if ((await h.queryPermission({ mode })) !== 'granted'){
+          if ((await h.requestPermission({ mode })) !== 'granted') throw new Error('permission');
+        }
+      }
+    } catch (e){
+      setBusy(false);
+      setStartMsg('Chrome needs your permission to open those photos again. Press Continue and choose Allow, or add the photos the usual way.', true);
+      return;
+    }
+    $('eventInput').value = sess.eventName || '';
+    $('tagsInput').value = sess.tagsText || '';
+    if (sess.sortBy === 'name' || sess.sortBy === 'time') $('sortInput').value = sess.sortBy;
+    setBusy(false);
+    $('continueCard').hidden = true;
+    ingest(sess.handles, sess.isFolder ? { folder: sess.handles[0] } : {});
+  };
 }
 
 function wrapFile(f){
@@ -861,6 +943,8 @@ async function ingest(handles, opts){
   state.eventName = typedName || (opts.folder ? opts.folder.name
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
+  state.tagsText = $('tagsInput').value;
+  state.sourceHandles = handles.filter(isRealHandle);
   state.sortBy = $('sortInput').value;
   state.startedAt = Date.now();
   writeJSON(SETTINGS_KEY, { sort: state.sortBy });
@@ -872,6 +956,7 @@ async function ingest(handles, opts){
   state.decisions = built.items.map(it => store[it.key] || null);
   state.index = 0;
   setStartMsg('');
+  saveSession();
 
   const restored = state.decisions.filter(Boolean).length;
   if (restored > 0){
@@ -900,6 +985,8 @@ async function addMore(handles){
   state.skippedCamera += built.skippedCamera;
   state.pairsSkipped += built.pairsSkipped;
   state.badZips = state.badZips.concat(built.badZips);
+  state.sourceHandles = state.sourceHandles.concat(handles.filter(isRealHandle));
+  saveSession();
   if (state.mode === 'panel') closePanel();
   if (wasAtEnd) state.index = oldLen;
   setNote(`Added ${built.items.length} photo${built.items.length === 1 ? '' : 's'}`);
@@ -932,6 +1019,8 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
+  state.sourceHandles = [];
+  showContinueCard();
   if (state.round === 2 && roundOneStore){ store = roundOneStore; roundOneStore = null; }
   state.round = 1;
   state.flagged = null;
@@ -1014,6 +1103,7 @@ function beginSorting(startAt){
   $('start').hidden = true;
   $('sort').hidden = false;
   $('eventTitle').textContent = state.eventName;
+  $('addBtn').hidden = state.round === 2;
   buildTagButtons();
   buildHints();
   $('grades').hidden = !state.tags.length;
@@ -1410,7 +1500,7 @@ async function saveAll(){
     el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
     failed.length ? el('p', { text: `${failed.length} could not be saved: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '; and more' : ''}.` }) : null,
     el('div', { class: 'row' },
-      el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); resetToStart(); } }),
+      el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); sessionClear(); resetToStart(); } }),
       el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
     )
   ]);

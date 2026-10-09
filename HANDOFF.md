@@ -126,3 +126,9 @@ More options has a box for event names (one per line, saved in localStorage key 
 
 ## 17. WASD keys
 D = keep, A = reject, W = keep + needs post processing, S = undo (same as the arrows and Ctrl+Z). The hint bar shows both. Test: tests/test_wasd.js. Note: test_round2.js failed once on a timing race (short sleeps) and passed on every rerun; if it flickers, raise its sleeps.
+
+
+## 18. Add photos button, remembered photos, big batch check (Oct 9)
+- **Add photos** button in the sorting bar (hidden in round 2) opens the file picker and appends to the batch (same path as dropping more).
+- **Remembered photos:** the page keeps Chrome file and folder handles (not the photos) in IndexedDB (db photosorter-session). Next visit the start screen shows "Continue <event>?"; one click, Chrome asks permission once, then the usual resume panel appears and decisions come back from localStorage. Cleared by "Forget this" or by "Sort more photos" after saving. Photos must still be in the same place. Handles from the plain file input (old fallback) cannot be remembered. Round 2 is never saved. jsdom has no IndexedDB, so this is checked only in real Chromium (tests/big_batch_chromium.js, which stands in OPFS handles for the pickers; the real permission prompt could not be automated).
+- **Big batch:** 2000 JPGs (1.2 MB each) in real Chromium: first photo in under 1 s, median 15 ms from key press to next photo shown (95th percentile 122 ms, max 549 ms), heap about 4 MB, 100 rapid presses all counted, reopen and resume correct.
