@@ -114,3 +114,7 @@ node test_zoom.js
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. `tests/fx/` and `node_modules/` are git-ignored.
 
 For real-browser checks, Playwright with Chromium at `/opt/pw-browsers/chromium` works with `file:///.../index.html` and `setInputFiles('#fileInput', [...])`.
+
+
+## 15. Palette matches the ASB hub
+The app now uses the hub's dark theme (bg #111110, panels #1c1c1a, borders #2e2d2a, text #f0ede8, green #2ecc87, red #e05555, blue #6b9ff0, yellow #e0b84a) and lists DM Sans first in the font stack. The font is not downloaded (local only), so it only shows if installed; otherwise a system font is used. Logo and favicon recolored to match. Colors live in the :root CSS variables at the top of index.html.
