@@ -53,6 +53,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 9. **Go to a photo:** G key or the "Go to" button in the top bar opens a box. Type a photo number and press Enter, or click "First not sorted (N)". Out-of-range numbers keep the box open. Decisions already made are kept. Test: `test_goto.js`.
 10. **Sort order:** start screen dropdown, "When they were taken (file date)" (default) or "File name". Remembered. Test: `test_sort.js`.
 11. **Logo:** `logo.svg` (green photo card over a red one) and `logo.png` (512 px). It is inline in `index.html` as the browser tab icon (data URI) and as a small mark above the start screen title. No network files.
+12. **Folder help:** a tip on the start screen ("Choose a folder" saves the finished folder inside the same folder, nothing to set up), and on the save panel (when photos were dragged in) plain steps for the Chrome window: click New folder, name it, open it, Select Folder, and that Chrome will not accept Desktop, Documents or Downloads themselves. The "could not use that folder" message says the same. A special "Needs post processing" button type was tried and dropped at Luke's request. For one-key combos, Luke types combined buttons such as "Soccer, Soccer needs editing, Volleyball, Volleyball needs editing" in the buttons box.
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.

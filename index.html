@@ -155,6 +155,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
         <button id="choosePhotosBtn" class="btn" type="button">Choose photos</button>
         <button id="chooseFolderBtn" class="btn ghost" type="button">Choose a folder</button>
       </div>
+      <small class="hint">Tip: <b>Choose a folder</b> saves the finished folder inside that same folder, so there is nothing to set up.</small>
       <input id="fileInput" type="file" multiple accept="image/*,.cr2,.zip" hidden>
     </div>
 
@@ -1170,6 +1171,7 @@ function openFinish(){
     el('label', { for: 'finishName', text: 'Name for the sorted folder' }),
     nameInput,
     where,
+    state.sourceDir ? null : el('p', { class: 'small', text: 'When you click Save, a window opens. Pick the folder to put the finished folder in. If you do not have one yet, click “New folder” in that window, name it, open it, then click “Select Folder”. Chrome will not let you pick Desktop, Documents, or Downloads themselves, so use a folder inside one of them.' }),
     el('p', { class: 'small', text: 'Everything is saved as JPG or PNG. CR2 files are saved as JPGs from the preview built into them.' }),
     el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
     el('div', { class: 'row' },
@@ -1229,7 +1231,7 @@ async function saveAll(){
       if (e && e.name === 'AbortError') return;
       openPanel('finish', [
         el('h2', { text: 'Could not use that folder' }),
-        el('p', { text: 'Chrome may not allow top-level folders like Downloads, Documents, or Desktop. Pick or make a regular folder inside one of them.' }),
+        el('p', { text: 'Chrome will not let you pick Desktop, Documents, or Downloads themselves. In the window, open one of them, click “New folder”, name it, open it, then click “Select Folder”.' }),
         el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Back', onclick: openFinish }))
       ]);
       return;
