@@ -52,6 +52,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 8. **Renamed** `photo-sorter.html` to `index.html` for GitHub Pages.
 9. **Go to a photo:** G key or the "Go to" button in the top bar opens a box. Type a photo number and press Enter, or click "First not sorted (N)". Out-of-range numbers keep the box open. Decisions already made are kept. Test: `test_goto.js`.
 10. **Sort order:** start screen dropdown, "When they were taken (file date)" (default) or "File name". Remembered. Test: `test_sort.js`.
+11. **Logo:** `logo.svg` (green photo card over a red one) and `logo.png` (512 px). It is inline in `index.html` as the browser tab icon (data URI) and as a small mark above the start screen title. No network files.
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.

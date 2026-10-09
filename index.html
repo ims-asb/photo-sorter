@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Photo sorter</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%232d2d2d%22/%3E%3Crect x=%229%22 y=%2213%22 width=%2234%22 height=%2238%22 rx=%225%22 fill=%22%23ee6055%22 transform=%22rotate%28-10 26 32%29%22/%3E%3Crect x=%2221%22 y=%2213%22 width=%2234%22 height=%2238%22 rx=%225%22 fill=%22%234fc08d%22 transform=%22rotate%288 38 32%29%22/%3E%3Cpath d=%22M26 44l8-11 6 7 4-5 7 9z%22 fill=%22%23fff%22 transform=%22rotate%288 38 32%29%22/%3E%3Ccircle cx=%2242%22 cy=%2224%22 r=%223.5%22 fill=%22%23fff%22 transform=%22rotate%288 38 32%29%22/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#383838;
@@ -30,6 +31,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 /* start screen */
 #start{min-height:100%;display:grid;align-content:center;padding:2rem 1.25rem}
 #start .col{width:min(34rem,100%);margin:0 auto}
+#start .logo{width:56px;height:56px;display:block;margin:0 0 1rem}
 #start h1{font-size:clamp(2rem,6vw,3rem);line-height:1.05;letter-spacing:-.02em;margin:0 0 1rem;font-weight:750}
 #start p{color:var(--muted);line-height:1.5;margin:0 0 1.5rem;max-width:32rem}
 .field{display:grid;gap:.4rem;margin-bottom:1.1rem}
@@ -142,6 +144,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 
 <main id="start">
   <div class="col">
+    <svg class="logo" role="img" aria-label="Photo sorter logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2d2d2d"/><rect x="9" y="13" width="34" height="38" rx="5" fill="#ee6055" transform="rotate(-10 26 32)"/><rect x="21" y="13" width="34" height="38" rx="5" fill="#4fc08d" transform="rotate(8 38 32)"/><path d="M26 44l8-11 6 7 4-5 7 9z" fill="#fff" transform="rotate(8 38 32)"/><circle cx="42" cy="24" r="3.5" fill="#fff" transform="rotate(8 38 32)"/></svg>
     <h1>Sort photos fast</h1>
     <p>Add your photos, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
 
