@@ -118,3 +118,7 @@ For real-browser checks, Playwright with Chromium at `/opt/pw-browsers/chromium`
 
 ## 15. Palette matches the ASB hub
 The app now uses the hub's dark theme (bg #111110, panels #1c1c1a, borders #2e2d2a, text #f0ede8, green #2ecc87, red #e05555, blue #6b9ff0, yellow #e0b84a) and lists DM Sans first in the font stack. The font is not downloaded (local only), so it only shows if installed; otherwise a system font is used. Logo and favicon recolored to match. Colors live in the :root CSS variables at the top of index.html.
+
+
+## 16. Event pick list and finish summary
+More options has a box for event names (one per line, saved in localStorage key photosorter:v1:events, local only). They show as a pick list on the start screen and in the finish name box; typing your own still works. After saving, the Saved panel shows photos in, kept, rejected, needs post processing, and about how many minutes since the photos were loaded. Nothing connects to the ASB hub (school is Microsoft only). Test: tests/test_events.js.

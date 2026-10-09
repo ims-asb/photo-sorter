@@ -39,6 +39,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 details.more{margin-bottom:1.1rem}
 details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 .field select{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%;color:inherit}
+.field textarea{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%;color:inherit;font:inherit;resize:vertical}
 .field input[type=text]{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%}
 .check{display:flex;gap:.6rem;align-items:flex-start;margin-bottom:1.5rem;line-height:1.35}
 .check input{margin-top:.2rem;width:1.1rem;height:1.1rem;accent-color:var(--grade)}
@@ -164,7 +165,8 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 
     <div class="field">
       <label for="eventInput">What photos are these for?</label>
-      <input id="eventInput" type="text" autocomplete="off" placeholder="For example: Spring Dance">
+      <input id="eventInput" type="text" autocomplete="off" list="eventOptions" placeholder="For example: Spring Dance">
+      <datalist id="eventOptions"></datalist>
     </div>
 
     <details class="more">
@@ -178,6 +180,12 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
         <button class="btn ghost" type="button" data-preset="none">None</button>
       </div>
       <small class="hint">Leave this empty to just keep or reject. You can sort the photos you keep into categories afterward.</small>
+    </div>
+
+    <div class="field">
+      <label for="eventsList">Your event names (one per line, shows up as a pick list above)</label>
+      <textarea id="eventsList" rows="4" placeholder="Spring Dance&#10;Volleyball game&#10;Quah assembly"></textarea>
+      <small class="hint">Saved on this computer only.</small>
     </div>
 
     <div class="field">
@@ -257,6 +265,7 @@ const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th gr
 const baseCode = d => d ? d.split('+')[0] : d;
 const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
 const SETTINGS_KEY = 'photosorter:v1:settings';
+const EVENTS_KEY = 'photosorter:v1:events';
 const DECISIONS_KEY = 'photosorter:v2:decisions';
 
 const $ = id => document.getElementById(id);
@@ -669,7 +678,21 @@ function setBusy(busy){
   $('chooseFolderBtn').disabled = busy;
 }
 
+function eventNames(){
+  const v = readJSON(EVENTS_KEY);
+  return Array.isArray(v) ? v : [];
+}
+function refreshEventOptions(){
+  $('eventOptions').replaceChildren(...eventNames().map(n => el('option', { value: n })));
+}
+
 function initStart(){
+  $('eventsList').value = eventNames().join('\n');
+  $('eventsList').addEventListener('input', () => {
+    writeJSON(EVENTS_KEY, $('eventsList').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 50));
+    refreshEventOptions();
+  });
+  refreshEventOptions();
   const s = readJSON(SETTINGS_KEY);
   $('tagsInput').value = '';   // the start screen is simple by default: keep or reject only
   if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
@@ -839,6 +862,7 @@ async function ingest(handles, opts){
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
   state.sortBy = $('sortInput').value;
+  state.startedAt = Date.now();
   writeJSON(SETTINGS_KEY, { sort: state.sortBy });
 
   state.items = built.items;
@@ -1234,7 +1258,7 @@ function openFinish(){
   const toCopy = sorted - t.reject;
 
   const where = el('p');
-  const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
+  const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', list: 'eventOptions', value: state.eventName });
   const refreshWhere = () => {
     where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
   };
@@ -1376,8 +1400,13 @@ async function saveAll(){
 
   state.saving = false;
   flushStore();
+  const tl = tally();
+  const total = state.items.length;
+  const mins = state.startedAt ? Math.max(1, Math.round((Date.now() - state.startedAt) / 60000)) : 0;
+  const summary = `${total} photo${total === 1 ? '' : 's'} in, ${jobs.length} kept, ${tl.reject} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
   openPanel('done', [
     el('h2', { text: 'Saved' }),
+    el('p', { class: 'summary', text: summary }),
     el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
     failed.length ? el('p', { text: `${failed.length} could not be saved: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '; and more' : ''}.` }) : null,
     el('div', { class: 'row' },
