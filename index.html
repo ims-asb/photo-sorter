@@ -60,8 +60,6 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #photo.zoomed{cursor:zoom-out}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
-#evtRibbon{position:absolute;left:1.25rem;top:.7rem;padding:.2rem .65rem;border-radius:6px;background:rgba(0,0,0,.55);font-size:.85rem;color:var(--text)}
-#evtRibbon.new{background:var(--edit);color:var(--ink);font-weight:700}
 #fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
 #endMsg h2{margin:0;font-size:1.6rem}
@@ -116,7 +114,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 .dz-actions{display:flex;gap:.6rem;flex-wrap:wrap}
 #veil{position:fixed;inset:10px;z-index:60;display:grid;place-items:center;background:rgba(0,0,0,.62);border:3px dashed var(--keep);border-radius:18px;font-size:1.6rem;font-weight:700;pointer-events:none}
 .sheet input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.6rem .7rem;margin-top:.3rem}
-.sheet label{display:block;margin-top:.7rem;color:var(--muted);font-size:.9rem}
+.sheet label{color:var(--muted);font-size:.9rem}
 
 /* panels */
 #panel{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:1rem}
@@ -128,7 +126,6 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 .sheet dd{margin:0;text-align:right;font-weight:650}
 .sheet .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
 .sheet .small{font-size:.85rem}
-.sheet ul.folders{margin:.4rem 0 .8rem;padding-left:1.2rem;color:var(--text)}
 .bigbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:1rem 0 .5rem}
 .bigbar div{height:100%;width:0;background:var(--keep)}
 
@@ -175,22 +172,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
     </div>
 
     <div class="field">
-      <label for="gapInput">Start a new event when photos are more than this many minutes apart (0 = never)</label>
-      <input id="gapInput" type="text" inputmode="numeric" autocomplete="off" value="60">
-      <small class="hint">Only used when photos are shown by date. Each event gets its own sorted folder, and you name them when you save.</small>
-    </div>
-
-    <div class="field">
       <label for="sortInput">Show the photos in this order</label>
       <select id="sortInput">
         <option value="time">When they were taken (file date)</option>
         <option value="name">File name</option>
       </select>
-    </div>
-
-    <div class="field">
-      <button id="combineBtn" class="btn ghost" type="button">Combine sorted folders from two people</button>
-      <small class="hint">Merge the sorted folders that two people made into one folder.</small>
     </div>
 
     <div id="startMsg" role="status" aria-live="polite"></div>
@@ -212,7 +198,6 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
   <section id="stage">
     <img id="photo" alt="">
     <div id="fname"></div>
-    <div id="evtRibbon" hidden></div>
     <div id="endMsg" hidden>
       <h2>That was the last photo</h2>
       <div><button id="endFinishBtn" class="btn" type="button">Finish and save</button></div>
@@ -270,12 +255,8 @@ const state = {
   eventName: '',
   tags: [],         // buttons for tagging: { code, label, folder }
   sortBy: 'time',   // time | name
-  gapMin: 60,       // minutes between photos that starts a new event (0 = off)
-  events: [],       // [{ from, to }] runs of photos, from is first index, to is one past the last
-  eventNames: [],   // names typed for each event when there is more than one
   items: [],        // { key, name, size, mtime, handle }
   decisions: [],    // null | 'keep' | 'reject' | a tag code (like 'g6' or 't:Soccer'), plus '+edit' on a keep or tag; one per photo
-  lastChoice: null, // the most recent decision, for the Space key
   index: 0,
   skippedCamera: 0,
   pairsSkipped: 0,
@@ -338,33 +319,13 @@ function folderFor(code){
   return safeName(code.replace(/^t:/, ''));
 }
 
-function computeEvents(){
-  const n = state.items.length;
-  const out = [];
-  let from = 0;
-  if (state.sortBy === 'time' && state.gapMin > 0){
-    const gap = state.gapMin * 60000;
-    for (let i = 1; i < n; i++){
-      if (Math.abs(state.items[i].mtime - state.items[i - 1].mtime) > gap){ out.push({ from, to: i }); from = i; }
-    }
-  }
-  out.push({ from, to: n });
-  state.events = out;
-}
-const eventIndexOf = i => state.events.findIndex(e => i >= e.from && i < e.to);
-const clock = t => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-function eventNameFor(k){
-  if (state.events.length < 2) return state.eventName;
-  return state.eventNames[k] || `${state.eventName} - event ${k + 1}`;
-}
-
 function buildHints(){
   const n = state.tags.length;
   const items = [['←', 'Reject'], ['→', 'Keep']];
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
-  items.push(['Space', 'Same as last photo'], ['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
+  items.push(['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
   $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
 }
 
@@ -673,7 +634,6 @@ function setStartMsg(text, isError){
 function setBusy(busy){
   $('choosePhotosBtn').disabled = busy;
   $('chooseFolderBtn').disabled = busy;
-  $('combineBtn').disabled = busy;
 }
 
 function initStart(){
@@ -681,7 +641,6 @@ function initStart(){
   $('tagsInput').value = s && typeof s.tags === 'string' ? s.tags
                        : s && s.useGrades === false ? PRESETS.none : PRESETS.grades;
   if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
-  if (s && Number.isFinite(s.gap) && s.gap >= 0) $('gapInput').value = String(s.gap);
   document.querySelectorAll('[data-preset]').forEach(b => {
     b.addEventListener('click', () => { $('tagsInput').value = PRESETS[b.dataset.preset]; });
   });
@@ -690,7 +649,6 @@ function initStart(){
     setBusy(true);
     setStartMsg('This tool needs Chrome or Edge on a computer. Open this file there to use it.', true);
   }
-  $('combineBtn').addEventListener('click', () => openCombine([]));
   $('chooseFolderBtn').addEventListener('click', chooseFolder);
   $('choosePhotosBtn').addEventListener('click', choosePhotos);
   $('fileInput').addEventListener('change', e => {
@@ -848,9 +806,7 @@ async function ingest(handles, opts){
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
   state.sortBy = $('sortInput').value;
-  const gap = parseInt($('gapInput').value, 10);
-  state.gapMin = gap >= 0 ? Math.min(gap, 100000) : 60;
-  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value, sort: state.sortBy, gap: state.gapMin });
+  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value, sort: state.sortBy });
 
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
@@ -858,8 +814,6 @@ async function ingest(handles, opts){
   state.badZips = built.badZips;
   state.decisions = built.items.map(it => store[it.key] || null);
   state.index = 0;
-  state.eventNames = [];
-  computeEvents();
   setStartMsg('');
 
   const restored = state.decisions.filter(Boolean).length;
@@ -889,7 +843,6 @@ async function addMore(handles){
   state.skippedCamera += built.skippedCamera;
   state.pairsSkipped += built.pairsSkipped;
   state.badZips = state.badZips.concat(built.badZips);
-  computeEvents();
   if (state.mode === 'panel') closePanel();
   if (wasAtEnd) state.index = oldLen;
   setNote(`Added ${built.items.length} photo${built.items.length === 1 ? '' : 's'}`);
@@ -922,9 +875,6 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
-  state.lastChoice = null;
-  state.events = [];
-  state.eventNames = [];
   state.tags = [];
   $('eventInput').value = '';
   clearCache();
@@ -1040,15 +990,6 @@ function render(){
   $('photo').hidden = atEnd;
   $('fname').hidden = atEnd;
 
-  const rib = $('evtRibbon');
-  if (!atEnd && state.events.length > 1){
-    const k = eventIndexOf(state.index);
-    const first = state.index === state.events[k].from && k > 0;
-    rib.textContent = (first ? 'New event starts here: ' : '') + `Event ${k + 1} of ${state.events.length} (${clock(state.items[state.events[k].from].mtime)})`;
-    rib.classList.toggle('new', first);
-    rib.hidden = false;
-  } else rib.hidden = true;
-
   if (!atEnd) showPhoto(state.index);
 }
 
@@ -1060,7 +1001,6 @@ function decide(code, edit){
   setZoom(false);
   flyOff(full);
   state.decisions[state.index] = full;
-  state.lastChoice = full;
   store[state.items[state.index].key] = full;
   persist();
   state.index++;
@@ -1123,7 +1063,6 @@ function undoAllAsk(){
 function undoAll(){
   state.items.forEach(it => { delete store[it.key]; });
   state.decisions = new Array(state.items.length).fill(null);
-  state.lastChoice = null;
   state.index = 0;
   flushStore();
   closePanel();
@@ -1140,14 +1079,9 @@ function undo(){
   setZoom(false);
   state.index--;
   state.decisions[state.index] = null;
-  state.lastChoice = (state.index > 0 && state.decisions[state.index - 1]) || null;
   delete store[state.items[state.index].key];
   persist();
   render();
-}
-
-function repeatLast(){
-  if (state.lastChoice) decide(baseCode(state.lastChoice), isEdit(state.lastChoice));
 }
 
 function flyOff(code){
@@ -1191,8 +1125,8 @@ function closePanel(){
   state.mode = state.items.length ? 'sort' : 'start';
 }
 
-function outputFolderName(k){
-  return (safeName(eventNameFor(k || 0)) || 'Photos') + ' - sorted';
+function outputFolderName(){
+  return (safeName(state.eventName) || 'Photos') + ' - sorted';
 }
 
 function whereText(){
@@ -1216,37 +1150,22 @@ function openFinish(){
   const toCopy = sorted - t.reject;
 
   const where = el('p');
-  const multi = state.events.length > 1;
   const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
   const refreshWhere = () => {
-    where.textContent = multi
-      ? `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into ${state.events.length} new folders, one per event, ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside each one, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`
-      : `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
+    where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
   };
   nameInput.addEventListener('input', () => {
     state.eventName = nameInput.value.trim() || defaultEventName();
     $('eventTitle').textContent = state.eventName;
     refreshWhere();
   });
-  const eventFields = [];
-  if (multi){
-    state.events.forEach((ev, k) => {
-      const f = el('input', { type: 'text', id: 'evName' + k, autocomplete: 'off', value: eventNameFor(k) });
-      f.addEventListener('input', () => { state.eventNames[k] = f.value.trim(); });
-      const lastT = state.items[ev.to - 1].mtime;
-      eventFields.push(
-        el('label', { for: 'evName' + k, text: `Event ${k + 1}: ${ev.to - ev.from} photo${ev.to - ev.from === 1 ? '' : 's'}, ${clock(state.items[ev.from].mtime)} to ${clock(lastT)}` }),
-        f
-      );
-    });
-  }
   refreshWhere();
 
   openPanel('finish', [
     el('h2', { text: unsorted === 0 ? 'All photos sorted' : 'Save what you\'ve sorted so far' }),
     el('dl', null, rows.map(([label, count]) => [el('dt', { text: label }), el('dd', { class: 'num', text: count })])),
-    multi ? el('p', { text: `These photos look like ${state.events.length} separate events, because there are long gaps between them. Name each one. Each is saved in its own folder.` }) : null,
-    ...(multi ? eventFields : [el('label', { for: 'finishName', text: 'Name for the sorted folder' }), nameInput]),
+    el('label', { for: 'finishName', text: 'Name for the sorted folder' }),
+    nameInput,
     where,
     el('p', { class: 'small', text: 'Everything is saved as JPG or PNG. CR2 files are saved as JPGs from the preview built into them.' }),
     el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
@@ -1296,13 +1215,6 @@ async function copyOne(item, dir){
   return 'copied';
 }
 
-function savedWhere(jobs, dest){
-  const names = [...new Set(jobs.map(j => outputFolderName(j.ev)))];
-  return names.length > 1
-    ? `They are in ${names.length} folders (${names.map(n => `“${n}”`).join(', ')}) inside “${dest.name}”.`
-    : `They are in “${names[0] || outputFolderName()}” inside “${dest.name}”.`;
-}
-
 async function saveAll(){
   // Where to save: the folder you chose, or ask now. This has to happen first,
   // straight from the button click, or the browser won't show the folder picker.
@@ -1335,18 +1247,16 @@ async function saveAll(){
   state.decisions.forEach((code, i) => {
     const b = baseCode(code);
     if (!b || b === 'reject') return;
-    jobs.push({ i, ev: Math.max(0, eventIndexOf(i)), folder: folderFor(b), edit: isEdit(code) });
+    jobs.push({ i, folder: folderFor(b), edit: isEdit(code) });
   });
 
   let copied = 0, already = 0, done = 0;
   const failed = [];
   try {
-    const outDirs = {};
+    const outDir = await dest.getDirectoryHandle(outputFolderName(), { create: true });
     const dirs = {};
     for (const j of jobs){
-      if (!outDirs[j.ev]) outDirs[j.ev] = await dest.getDirectoryHandle(outputFolderName(j.ev), { create: true });
-      const outDir = outDirs[j.ev];
-      const id = j.ev + '|' + (j.edit ? EDIT_FOLDER + '/' : '') + j.folder;
+      const id = (j.edit ? EDIT_FOLDER + '/' : '') + j.folder;
       j.id = id;
       if (!dirs[id]){
         const parent = j.edit ? await outDir.getDirectoryHandle(EDIT_FOLDER, { create: true }) : outDir;
@@ -1381,132 +1291,12 @@ async function saveAll(){
   flushStore();
   openPanel('done', [
     el('h2', { text: 'Saved' }),
-    el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. ${savedWhere(jobs, dest)} Drag the folders into OneDrive from there.` }),
+    el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
     failed.length ? el('p', { text: `${failed.length} could not be saved: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '; and more' : ''}.` }) : null,
     el('div', { class: 'row' },
       el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); resetToStart(); } }),
       el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
     )
-  ]);
-}
-
-/* ---------- combine sorted folders (two people, one result) ---------- */
-
-const SKIP_NAMES = /^(\.|desktop\.ini$|thumbs\.db$)/i;
-
-async function sameFolder(a, b){
-  try { return a.isSameEntry ? await a.isSameEntry(b) : a === b; } catch (e) { return a === b; }
-}
-
-async function countFiles(dir){
-  let n = 0;
-  for await (const [name, h] of dir.entries()){
-    if (SKIP_NAMES.test(name)) continue;
-    n += h.kind === 'directory' ? await countFiles(h) : 1;
-  }
-  return n;
-}
-
-// Copies everything from src into dst, keeping subfolders. A file that is already there with the
-// same name and size is skipped. Same name but different size is kept as "name (2)".
-async function copyTree(src, dst, stats, tick){
-  for await (const [name, h] of src.entries()){
-    if (SKIP_NAMES.test(name)) continue;
-    if (h.kind === 'directory'){
-      await copyTree(h, await dst.getDirectoryHandle(name, { create: true }), stats, tick);
-      continue;
-    }
-    try {
-      const f = await h.getFile();
-      let target = name;
-      const size = await exists(dst, target);
-      if (size !== null){
-        if (size === f.size){ stats.already++; tick(); continue; }
-        target = await uniqueName(dst, target);
-      }
-      const fh = await dst.getFileHandle(target, { create: true });
-      const w = await fh.createWritable();
-      try { await w.write(f); } finally { await w.close(); }
-      stats.copied++;
-    } catch (err){
-      stats.failed.push(`${name} (${err && err.message ? err.message : 'could not be copied'})`);
-    }
-    tick();
-  }
-}
-
-function openCombine(list, name, message){
-  const nameInput = el('input', { type: 'text', id: 'combineName', autocomplete: 'off', value: name || 'Combined - sorted' });
-  const keepName = () => nameInput.value;
-  const add = async () => {
-    const typed = keepName();
-    let h;
-    try { h = await window.showDirectoryPicker({ mode: 'read', id: 'photo-sorter-combine' }); }
-    catch (e){
-      if (e && e.name === 'AbortError') return;
-      openCombine(list, typed, 'Could not open that folder. Pick a regular folder, not a top-level one like Documents.');
-      return;
-    }
-    for (const x of list) if (await sameFolder(x, h)){ openCombine(list, typed, `“${h.name}” is already in the list.`); return; }
-    openCombine(list.concat([h]), typed);
-  };
-  const go = async () => {
-    const typed = safeName(keepName()) || 'Combined - sorted';
-    let dest;
-    try { dest = await window.showDirectoryPicker({ mode: 'readwrite', id: 'photo-sorter-out' }); }
-    catch (e){
-      if (e && e.name === 'AbortError') return;
-      openCombine(list, typed, 'Could not use that folder. Pick or make a regular folder inside Documents, Desktop, or OneDrive.');
-      return;
-    }
-    combineRun(list, typed, dest);
-  };
-  openPanel('combine', [
-    el('h2', { text: 'Combine sorted folders' }),
-    el('p', { text: 'Pick the sorted folders that each person made, for example “Soccer - sorted” from two computers. They are copied into one new folder. The folders you pick are not changed or deleted.' }),
-    list.length ? el('ul', { class: 'folders' }, list.map(h => el('li', { text: h.name }))) : el('p', { class: 'small', text: 'No folders picked yet.' }),
-    message ? el('p', { class: 'small', text: message }) : null,
-    el('label', { for: 'combineName', text: 'Name for the combined folder' }),
-    nameInput,
-    el('div', { class: 'row' },
-      el('button', { class: 'btn ghost', type: 'button', text: list.length ? 'Add another folder' : 'Add a folder', onclick: add }),
-      el('button', { class: 'btn primary', type: 'button', text: 'Choose where to put it and combine', disabled: list.length < 2 ? 'disabled' : null, onclick: go }),
-      el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: closePanel })
-    )
-  ]);
-}
-
-async function combineRun(list, name, dest){
-  state.panelKind = 'combining';
-  const status = el('p', { text: 'Starting…' });
-  const bar = el('div');
-  $('sheet').replaceChildren(el('h2', { text: 'Combining folders' }), el('div', { class: 'bigbar' }, bar), status);
-  const stats = { copied: 0, already: 0, failed: [] };
-  try {
-    const out = await dest.getDirectoryHandle(name, { create: true });
-    for (const src of list) if (await sameFolder(src, out)) throw new Error(`the new folder “${name}” is one of the folders you picked, choose a different name or place`);
-    let total = 0;
-    for (const src of list) total += await countFiles(src);
-    let done = 0;
-    const tick = () => {
-      done++;
-      bar.style.width = (total ? done / total * 100 : 100) + '%';
-      status.textContent = `Looked at ${done} of ${total} files`;
-    };
-    for (const src of list) await copyTree(src, out, stats, tick);
-  } catch (e){
-    openPanel('combine', [
-      el('h2', { text: 'Combining stopped' }),
-      el('p', { text: `${e && e.message ? e.message : e}. Files already copied are safe, and you can combine again to continue.` }),
-      el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Back', onclick: () => openCombine(list, name) }))
-    ]);
-    return;
-  }
-  openPanel('combined', [
-    el('h2', { text: 'Combined' }),
-    el('p', { text: `${stats.copied} photo${stats.copied === 1 ? '' : 's'} copied into “${name}” inside “${dest.name}”${stats.already ? `, ${stats.already} already there` : ''}. Photos with the same name but different content were kept as “name (2)”.` }),
-    stats.failed.length ? el('p', { text: `${stats.failed.length} could not be copied: ${stats.failed.slice(0, 5).join('; ')}${stats.failed.length > 5 ? '; and more' : ''}.` }) : null,
-    el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Close', onclick: closePanel }))
   ]);
 }
 
@@ -1610,7 +1400,6 @@ function bindSortControls(){
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
-    else if (e.key === ' ' && tag !== 'BUTTON'){ e.preventDefault(); if (!e.repeat) repeatLast(); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
