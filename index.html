@@ -113,6 +113,10 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 
 
 /* drop zone and drag veil */
+.steps{display:flex;gap:.6rem 1.4rem;flex-wrap:wrap;list-style:none;padding:0;margin:0 0 1.4rem;counter-reset:s;color:var(--muted)}
+.steps li{counter-increment:s}
+.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:1.4rem;height:1.4rem;margin-right:.45rem;border-radius:50%;background:var(--line);color:var(--text);font-size:.8rem;font-weight:700}
+.steps kbd{font:inherit;font-size:.82rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text)}
 .dropzone{border:2px dashed var(--line);border-radius:16px;padding:1.6rem 1.4rem;margin-bottom:1.4rem;transition:border-color .12s,background .12s}
 .dropzone.over{border-color:var(--keep);background:rgba(46,204,135,.09)}
 .dz-title{font-size:1.3rem;font-weight:700;margin-bottom:.3rem}
@@ -128,6 +132,9 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 .sheet h2{margin:0 0 .6rem;font-size:1.4rem}
 .sheet p{color:var(--muted);line-height:1.45;margin:.4rem 0 1rem}
 .sheet dl{display:grid;grid-template-columns:1fr auto;gap:.35rem 1.5rem;margin:1rem 0}
+.sheet dl.keys{display:grid;grid-template-columns:auto 1fr;gap:.45rem 1rem;margin:.6rem 0 1rem;align-items:center}
+.sheet dl.keys dd{margin:0;text-align:left;font-weight:400}
+.sheet dl.keys kbd{font:inherit;font-size:.85rem;padding:.1rem .5rem;border-radius:5px;background:var(--line);white-space:nowrap}
 .sheet dt{color:var(--muted)}
 .sheet dd{margin:0;text-align:right;font-weight:650}
 .sheet .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
@@ -151,6 +158,12 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <svg class="logo" role="img" aria-label="Photo sorter logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1c1c1a"/><rect x="9" y="13" width="34" height="38" rx="5" fill="#e05555" transform="rotate(-10 26 32)"/><rect x="21" y="13" width="34" height="38" rx="5" fill="#2ecc87" transform="rotate(8 38 32)"/><path d="M26 44l8-11 6 7 4-5 7 9z" fill="#fff" transform="rotate(8 38 32)"/><circle cx="42" cy="24" r="3.5" fill="#fff" transform="rotate(8 38 32)"/></svg>
     <h1>Sort photos fast</h1>
     <p>Add your photos, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
+
+    <ol class="steps">
+      <li>Add your photos</li>
+      <li>Press <kbd>→</kbd> to keep or <kbd>←</kbd> to reject</li>
+      <li>Click <b>Finish and save</b></li>
+    </ol>
 
     <div id="continueCard" class="dropzone" hidden>
       <h2 id="continueTitle"></h2>
@@ -215,6 +228,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <div id="count" class="num"></div>
     <div id="note"></div>
     <div class="spacer"></div>
+    <button id="helpBtn" class="btn ghost" type="button" title="Show the keys (?)">?</button>
     <button id="addBtn" class="btn ghost" type="button" title="Add more photos to this batch">Add photos</button>
     <button id="gotoBtn" class="btn ghost" type="button" title="Jump to a photo (G)">Go to</button>
     <button id="undoBtn" class="btn ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
@@ -352,14 +366,26 @@ function folderFor(code){
   return safeName(code.replace(/^t:/, ''));
 }
 
-function buildHints(){
+function hintItems(){
   const n = state.tags.length;
   const items = [['← or A', 'Reject'], ['→ or D', 'Keep']];
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑ or W', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
   items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less'], ['G', 'Go to photo'], ['Ctrl+Z or S', 'Undo']);
-  $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
+  return items;
+}
+function buildHints(){
+  $('hints').replaceChildren(...hintItems().map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
+}
+function openHelp(){
+  if (state.mode !== 'sort' || state.saving) return;
+  openPanel('help', [
+    el('h2', { text: 'Keys' }),
+    el('dl', { class: 'keys' }, ...hintItems().map(([k, label]) => [el('dt', null, el('kbd', { text: k })), el('dd', { text: label })])),
+    el('p', { text: 'Your choices are saved as you go. You can close this page and continue later.' }),
+    el('div', { class: 'row' }, el('button', { class: 'btn primary', type: 'button', text: 'Back to sorting', onclick: closePanel }))
+  ]);
 }
 
 const ZOOM_LEVELS = [1.5, 2, 3, 4, 6, 8];
@@ -718,6 +744,7 @@ function initStart(){
   $('choosePhotosBtn').addEventListener('click', choosePhotos);
   showContinueCard();
   $('addBtn').addEventListener('click', choosePhotos);
+  $('helpBtn').addEventListener('click', openHelp);
   $('fileInput').addEventListener('change', e => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -1619,6 +1646,7 @@ function bindSortControls(){
     else if (e.key === '+' || e.key === '='){ e.preventDefault(); stepZoom(1); }
     else if (e.key === '-' || e.key === '_'){ e.preventDefault(); stepZoom(-1); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
+    else if (e.key === '?'){ e.preventDefault(); openHelp(); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp' || k === 'w'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
     else if (k === 's' && !e.shiftKey){ e.preventDefault(); if (!e.repeat) undo(); }
