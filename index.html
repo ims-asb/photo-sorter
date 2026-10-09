@@ -36,6 +36,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
 #start p{color:var(--muted);line-height:1.5;margin:0 0 1.5rem;max-width:32rem}
 .field{display:grid;gap:.4rem;margin-bottom:1.1rem}
 .field label{font-size:.9rem;color:var(--muted)}
+details.more{margin-bottom:1.1rem}
+details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 .field select{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%;color:inherit}
 .field input[type=text]{background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;width:100%}
 .check{display:flex;gap:.6rem;align-items:flex-start;margin-bottom:1.5rem;line-height:1.35}
@@ -164,15 +166,17 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
       <input id="eventInput" type="text" autocomplete="off" placeholder="For example: Spring Dance">
     </div>
 
+    <details class="more">
+      <summary>More options</summary>
     <div class="field">
-      <label for="tagsInput">Extra buttons for tagging candids (optional, separated by commas)</label>
+      <label for="tagsInput">Sort into categories in one go (optional, separated by commas)</label>
       <input id="tagsInput" type="text" autocomplete="off" placeholder="For example: Volleyball, Soccer, Cross country">
       <div class="presets">Quick fill:
         <button class="btn ghost" type="button" data-preset="grades">Grades</button>
         <button class="btn ghost" type="button" data-preset="sports">Sports</button>
         <button class="btn ghost" type="button" data-preset="none">None</button>
       </div>
-      <small class="hint">Each one gets a button and a number key (1 to 8) and its own folder. Leave it empty for assemblies and other events.</small>
+      <small class="hint">Leave this empty to just keep or reject. You can sort the photos you keep into categories afterward.</small>
     </div>
 
     <div class="field">
@@ -182,6 +186,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2
         <option value="name">File name</option>
       </select>
     </div>
+
+    </details>
 
     <div id="startMsg" role="status" aria-live="polite"></div>
   </div>
@@ -265,6 +271,8 @@ const state = {
   skippedCamera: 0,
   pairsSkipped: 0,
   badZips: [],
+  round: 1,         // 1 = keep or reject, 2 = sort the kept photos into categories (nothing is saved to the browser in round 2)
+  flagged: null,    // keys of photos flagged for editing in round 1, carried into round 2
   mode: 'start',    // start | sort | panel
   panelKind: null,  // resume | finish | saving | done
   saving: false,
@@ -380,12 +388,15 @@ function defaultEventName(){
 /* Decisions are remembered per photo (name, size, and date), so the same photos pick up
    where you left off no matter which folder or drag they come from. */
 let store = readJSON(DECISIONS_KEY) || {};
+let roundOneStore = null;
 let saveTimer = null;
 function flushStore(){
+  if (state.round === 2) return;
   if (saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
   writeJSON(DECISIONS_KEY, store);
 }
 function persist(){
+  if (state.round === 2) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(flushStore, 250);
 }
@@ -642,8 +653,7 @@ function setBusy(busy){
 
 function initStart(){
   const s = readJSON(SETTINGS_KEY);
-  $('tagsInput').value = s && typeof s.tags === 'string' ? s.tags
-                       : s && s.useGrades === false ? PRESETS.none : PRESETS.grades;
+  $('tagsInput').value = '';   // the start screen is simple by default: keep or reject only
   if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
   document.querySelectorAll('[data-preset]').forEach(b => {
     b.addEventListener('click', () => { $('tagsInput').value = PRESETS[b.dataset.preset]; });
@@ -768,6 +778,7 @@ async function buildItems(handles, existingKeys, sortBy){
 
 function noteText(){
   const bits = [];
+  if (state.round === 2) bits.push('Round 2: sort the photos you kept into categories');
   if (state.skippedCamera) bits.push(`${state.skippedCamera} unsupported RAW or HEIC file${state.skippedCamera === 1 ? '' : 's'} skipped`);
   if (state.pairsSkipped) bits.push(`${state.pairsSkipped} RAW file${state.pairsSkipped === 1 ? '' : 's'} skipped because the JPG of the same shot is there`);
   if (state.badZips.length) bits.push(`${state.badZips.length} zip${state.badZips.length === 1 ? '' : 's'} could not be opened`);
@@ -810,7 +821,7 @@ async function ingest(handles, opts){
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
   state.sortBy = $('sortInput').value;
-  writeJSON(SETTINGS_KEY, { tags: $('tagsInput').value, sort: state.sortBy });
+  writeJSON(SETTINGS_KEY, { sort: state.sortBy });
 
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
@@ -879,6 +890,9 @@ function resetToStart(){
   state.decisions = [];
   state.index = 0;
   state.sourceDir = null;
+  if (state.round === 2 && roundOneStore){ store = roundOneStore; roundOneStore = null; }
+  state.round = 1;
+  state.flagged = null;
   state.tags = [];
   $('eventInput').value = '';
   clearCache();
@@ -1000,6 +1014,7 @@ function render(){
 function decide(code, edit){
   if (state.mode !== 'sort' || state.index >= state.items.length) return;
   if (code !== 'keep' && code !== 'reject' && !tagFor(code)) return;
+  if (state.round === 2 && state.flagged && state.flagged.has(state.items[state.index].key)) edit = true;
 
   const full = edit && code !== 'reject' ? code + EDIT_SUFFIX : code;
   setZoom(false);
@@ -1046,6 +1061,53 @@ function openGoTo(){
   ]);
   input.focus();
   input.select();
+}
+
+function openRound2(){
+  const input = el('input', { type: 'text', id: 'round2Tags', autocomplete: 'off', placeholder: 'For example: Volleyball, Soccer, Cross country' });
+  const start = () => {
+    const tags = parseTags(input.value);
+    if (!tags.length){ input.focus(); return; }
+    startRound2(tags);
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); start(); } });
+  openPanel('round2', [
+    el('h2', { text: 'Sort into categories' }),
+    el('p', { text: 'Next you will go through only the photos you kept, and press a number for each one. Nothing is saved yet. Everything is saved at the end, once.' }),
+    el('label', { for: 'round2Tags', text: 'Categories, separated by commas (up to 8)' }),
+    input,
+    el('div', { class: 'presets' }, 'Quick fill: ',
+      el('button', { class: 'btn ghost', type: 'button', text: 'Sports', onclick: () => { input.value = PRESETS.sports; input.focus(); } }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Grades', onclick: () => { input.value = PRESETS.grades; input.focus(); } })),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Start', onclick: start }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: openFinish })
+    )
+  ]);
+  input.focus();
+}
+
+function startRound2(tags){
+  const keepers = [];
+  const flagged = new Set();
+  state.items.forEach((it, i) => {
+    const b = baseCode(state.decisions[i]);
+    if (!b || b === 'reject') return;
+    keepers.push(it);
+    if (isEdit(state.decisions[i])) flagged.add(it.key);
+  });
+  if (!keepers.length) return;
+  roundOneStore = store;
+  store = {};
+  state.round = 2;
+  state.flagged = flagged;
+  state.tags = tags;
+  state.items = keepers;
+  state.decisions = new Array(keepers.length).fill(null);
+  state.index = 0;
+  clearCache();
+  closePanel();
+  beginSorting(0);
 }
 
 function undoAllAsk(){
@@ -1176,6 +1238,8 @@ function openFinish(){
     el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
     el('div', { class: 'row' },
       el('button', { class: 'btn primary', type: 'button', text: 'Save sorted photos', disabled: toCopy === 0 ? 'disabled' : null, onclick: saveAll }),
+      state.round === 1 && !state.tags.length && toCopy > 0
+        ? el('button', { class: 'btn ghost', type: 'button', text: 'Next: sort the kept photos into categories', onclick: openRound2 }) : null,
       el('button', { class: 'btn ghost', type: 'button',
         text: unsorted === 0 ? 'Go back one photo' : 'Keep sorting',
         onclick: () => { if (unsorted === 0) undo(); else closePanel(); } })

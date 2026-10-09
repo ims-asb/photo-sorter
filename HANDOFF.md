@@ -54,6 +54,7 @@ In the previous session, git pushes and the GitHub tools started returning 403 (
 10. **Sort order:** start screen dropdown, "When they were taken (file date)" (default) or "File name". Remembered. Test: `test_sort.js`.
 11. **Logo:** `logo.svg` (green photo card over a red one) and `logo.png` (512 px). It is inline in `index.html` as the browser tab icon (data URI) and as a small mark above the start screen title. No network files.
 12. **Folder help:** a tip on the start screen ("Choose a folder" saves the finished folder inside the same folder, nothing to set up), and on the save panel (when photos were dragged in) plain steps for the Chrome window: click New folder, name it, open it, Select Folder, and that Chrome will not accept Desktop, Documents or Downloads themselves. The "could not use that folder" message says the same. A special "Needs post processing" button type was tried and dropped at Luke's request. For one-key combos, Luke types combined buttons such as "Soccer, Soccer needs editing, Volleyball, Volleyball needs editing" in the buttons box.
+13. **Simple start, two rounds (Luke's decision, Oct 9):** the start screen shows only the drop zone and "What photos are these for?". The category buttons box and the sort order now live under a "More options" section, and the buttons box always starts empty (it is no longer remembered, and grades are no longer the default; the Grades and Sports quick-fill chips remain). Core use is Right = keep, Left = reject, Up = keep + needs editing. For categories, the finish panel (round 1 with no categories and at least one kept photo) offers "Next: sort the kept photos into categories". That asks for category names, then runs **round 2** over only the kept photos, in memory. Photos flagged in round 1 stay flagged, Right in round 2 means "keep with no category", Reject drops the photo. Nothing is saved between rounds, and round 2 never writes to the browser's saved decisions (the round 1 choices are restored on "Sort more photos"). Everything is saved once at the end, so there are no duplicate folders. Closing the page in round 2 loses round 2 progress. Typing categories in "More options" still gives the one-pass way. Test: `test_round2.js`.
 
 ## Decisions Luke made (do not re-ask)
 - Needs post processing combines with a tag (option B), not its own pile, and must work in one key press.
@@ -106,6 +107,7 @@ node test_tags.js
 node test_undoall.js
 node test_goto.js
 node test_sort.js
+node test_round2.js
 ```
 Each prints PASS/FAIL lines and ends with `ALL PASSED`. They load `../index.html` and mock the File System Access API. `tests/fx/` and `node_modules/` are git-ignored.
 

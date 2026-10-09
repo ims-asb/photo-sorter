@@ -23,6 +23,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
     }
   });
   const win = dom.window, doc = win.document, $ = id => doc.getElementById(id);
+  $('tagsInput').value = '6th grade candids, 7th grade candids, 8th grade candids';  // grades are no longer the default
   const key = (k, extra) => doc.body.dispatchEvent(new win.KeyboardEvent('keydown', Object.assign({ key: k, bubbles: true }, extra || {})));
   const add = (dir, name, content, t) => dir.kids.set(name, win.fileHandle(name, win.mkFile(name, content, t)));
 

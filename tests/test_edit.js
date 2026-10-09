@@ -17,6 +17,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
     }
   });
   const win = dom.window, doc = win.document, $ = id => doc.getElementById(id);
+  $('tagsInput').value = '6th grade candids, 7th grade candids, 8th grade candids';  // grades are no longer the default
   const key = k => doc.body.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true }));
   const btn = re => Array.from($('sheet').querySelectorAll('button')).find(b => re.test(b.textContent));
   const jpg = (n, t) => new win.File(['jpgdata-' + n], n, { lastModified: t, type: 'image/jpeg' });

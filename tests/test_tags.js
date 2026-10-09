@@ -22,7 +22,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   win.showDirectoryPicker = async () => dest;
   await sleep(30);
 
-  check('default is the three grades', $('tagsInput').value.includes('6th grade candids'));
+  check('start screen has no extra buttons by default', $('tagsInput').value === '' && !!doc.querySelector('details.more'));
   doc.querySelector('[data-preset="sports"]').click();
   check('sports preset fills the field', /Volleyball, Soccer/.test($('tagsInput').value));
   $('tagsInput').value = 'Volleyball, Soccer, cross country, soccer, Track+Field';
