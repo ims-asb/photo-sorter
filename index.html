@@ -64,6 +64,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #photo.zoomed{cursor:zoom-out}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
+#zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
 #fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
 #endMsg h2{margin:0;font-size:1.6rem}
@@ -208,6 +209,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
   <section id="stage">
     <img id="photo" alt="">
     <div id="fname"></div>
+    <div id="zoomBadge" hidden></div>
     <div id="endMsg" hidden>
       <h2>That was the last photo</h2>
       <div><button id="endFinishBtn" class="btn" type="button">Finish and save</button></div>
@@ -337,20 +339,21 @@ function buildHints(){
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
-  items.push(['Z', 'Zoom'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
+  items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less'], ['G', 'Go to photo'], ['Ctrl+Z', 'Undo']);
   $('hints').replaceChildren(...items.map(([k, label]) => el('span', null, el('kbd', { text: k }), label)));
 }
 
+const ZOOM_LEVELS = [1.5, 2, 3, 4, 6, 8];
 let zoomed = false;
+let zoomLevel = 2;   // starts gentle, and is remembered while the page is open
 function setZoom(on, evt){
   const img = $('photo');
   if (on && (!img.getAttribute('src') || !img.naturalWidth)) return;
   zoomed = on;
   img.classList.toggle('zoomed', on);
+  $('zoomBadge').hidden = !on;
   if (!on){ img.style.transform = ''; img.style.transformOrigin = ''; return; }
-  const box = img.getBoundingClientRect();
-  const fit = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
-  img.dataset.scale = String(Math.max(2, 1 / fit));
+  $('zoomBadge').textContent = zoomLevel + '\u00d7';
   moveZoom(evt);
 }
 function moveZoom(evt){
@@ -361,7 +364,22 @@ function moveZoom(evt){
   const x = evt ? (evt.clientX - st.left) / st.width : .5;
   const y = evt ? (evt.clientY - st.top) / st.height : .5;
   img.style.transformOrigin = `${Math.min(1, Math.max(0, x)) * 100}% ${Math.min(1, Math.max(0, y)) * 100}%`;
-  img.style.transform = `scale(${img.dataset.scale})`;
+  img.style.transform = `scale(${zoomLevel})`;
+}
+// dir +1 zooms in a step, -1 zooms out a step. Past the smallest step it zooms all the way out.
+function stepZoom(dir, evt){
+  if (state.mode !== 'sort') return;
+  if (!zoomed){
+    if (dir > 0) setZoom(true, evt);
+    return;
+  }
+  const i = ZOOM_LEVELS.indexOf(zoomLevel);
+  const next = i + dir;
+  if (next < 0){ setZoom(false); return; }
+  if (next >= ZOOM_LEVELS.length) return;
+  zoomLevel = ZOOM_LEVELS[next];
+  $('zoomBadge').textContent = zoomLevel + '\u00d7';
+  moveZoom(evt);
 }
 
 function buildTagButtons(){
@@ -1441,6 +1459,15 @@ function bindSortControls(){
   $('keepBtn').addEventListener('click', e => { decide('keep'); e.currentTarget.blur(); });
   $('photo').addEventListener('click', e => { if (state.mode === 'sort') setZoom(!zoomed, e); });
   $('photo').addEventListener('mousemove', moveZoom);
+  let wheelAt = 0;
+  $('stage').addEventListener('wheel', e => {
+    if (state.mode !== 'sort') return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - wheelAt < 120) return;   // a trackpad sends many events, take one step at a time
+    wheelAt = now;
+    stepZoom(e.deltaY < 0 ? 1 : -1, e);
+  }, { passive: false });
   $('editBtn').addEventListener('click', e => { decide('keep', true); e.currentTarget.blur(); });
   $('gotoBtn').addEventListener('click', e => { openGoTo(); e.currentTarget.blur(); });
   $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
@@ -1469,6 +1496,8 @@ function bindSortControls(){
     else if (e.key === 'ArrowLeft'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
+    else if (e.key === '+' || e.key === '='){ e.preventDefault(); stepZoom(1); }
+    else if (e.key === '-' || e.key === '_'){ e.preventDefault(); stepZoom(-1); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
