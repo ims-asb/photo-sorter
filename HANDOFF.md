@@ -122,3 +122,7 @@ The app now uses the hub's dark theme (bg #111110, panels #1c1c1a, borders #2e2d
 
 ## 16. Event pick list and finish summary
 More options has a box for event names (one per line, saved in localStorage key photosorter:v1:events, local only). They show as a pick list on the start screen and in the finish name box; typing your own still works. After saving, the Saved panel shows photos in, kept, rejected, needs post processing, and about how many minutes since the photos were loaded. Nothing connects to the ASB hub (school is Microsoft only). Test: tests/test_events.js.
+
+
+## 17. WASD keys
+D = keep, A = reject, W = keep + needs post processing, S = undo (same as the arrows and Ctrl+Z). The hint bar shows both. Test: tests/test_wasd.js. Note: test_round2.js failed once on a timing race (short sleeps) and passed on every rerun; if it flickers, raise its sleeps.
