@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IMS Sports Calendar</title>
+<meta name="description" content="Issaquah Middle School sports schedule for 2026-27. Runs only on this computer.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%231c1c1a%22/%3E%3Crect x=%2210%22 y=%2216%22 width=%2244%22 height=%2240%22 rx=%226%22 fill=%22%232ecc87%22/%3E%3Crect x=%2210%22 y=%2216%22 width=%2244%22 height=%2212%22 rx=%226%22 fill=%22%23e05555%22/%3E%3Crect x=%2218%22 y=%228%22 width=%226%22 height=%2214%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2240%22 y=%228%22 width=%226%22 height=%2214%22 rx=%223%22 fill=%22%23fff%22/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f7f6f2; --surface:#fff; --line:#e4e2da; --line2:#c8c5bb; --text:#1a1917; --muted:#706e67; --hint:#a09e97;
+  --accent:#2a5caa; --ink:#fff;
+  --c-volleyball:#2a5caa; --c-soccer:#1a6b4a; --c-xc:#92750a; --c-wrestling:#b83030; --c-girlsbb:#7a4cb0; --c-boysbb:#b5651d; --c-track:#1b7f86; --c-custom:#5a5855;
+  font-family:"DM Sans","Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111110; --surface:#1c1c1a; --line:#2e2d2a; --line2:#3d3c38; --text:#f0ede8; --muted:#8a8880; --hint:#5a5855;
+    --accent:#6b9ff0; --ink:#111110;
+    --c-volleyball:#6b9ff0; --c-soccer:#2ecc87; --c-xc:#e0b84a; --c-wrestling:#e05555; --c-girlsbb:#b48cf0; --c-boysbb:#f09a4a; --c-track:#4cc9c9; --c-custom:#a8a69e;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{min-height:100vh;font-size:15px;line-height:1.4}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:1100px;margin:0 auto;padding:1rem 16px 3rem}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;margin-bottom:.9rem}
+h1{font-size:1.35rem;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:.9rem}
+.spacer{flex:1}
+.btn{border:1px solid var(--line2);background:var(--surface);border-radius:8px;padding:.45rem .85rem;font-weight:600;font-size:.9rem}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:.45rem .85rem;font-weight:600;font-size:.9rem}
+.seg button[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.9rem}
+.filters{display:flex;flex-wrap:wrap;gap:.5rem .6rem;align-items:center;margin-bottom:.9rem}
+.chip{display:inline-flex;align-items:center;gap:.4rem;border:1.5px solid var(--c);border-radius:999px;padding:.25rem .7rem;background:transparent;font-size:.85rem;font-weight:600;color:var(--c)}
+.chip::before{content:"";width:.6rem;height:.6rem;border-radius:50%;background:var(--c)}
+.chip[aria-pressed="false"]{border-color:var(--line2);color:var(--muted);opacity:.7}
+.chip[aria-pressed="false"]::before{background:transparent;border:1.5px solid var(--line2)}
+select{background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:.4rem .6rem;font-size:.9rem}
+.nav{display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem}
+.nav h2{margin:0;font-size:1.05rem;font-weight:700;min-width:9.5rem;text-align:center}
+.nav .btn{padding:.35rem .7rem}
+.head,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.head span{font-size:.72rem;color:var(--hint);text-transform:uppercase;text-align:center;padding:.2rem 0;letter-spacing:.04em}
+.day{min-height:92px;background:var(--bg);border-radius:8px;padding:4px 5px;border:1px solid transparent;overflow:hidden;cursor:pointer;text-align:left;display:block;width:100%}
+.day:hover{border-color:var(--line2)}
+.day.other{opacity:.35}
+.day.past .ev{opacity:.55}
+.day.today{border-color:var(--accent)}
+.day .n{font-size:.78rem;color:var(--muted);display:block;margin-bottom:2px}
+.day.today .n{color:var(--accent);font-weight:700}
+.ev{display:block;margin-top:2px;border-radius:4px;padding:1px 5px;font-size:.72rem;line-height:1.35;background:var(--c);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev.away{background:transparent;color:var(--c);box-shadow:inset 0 0 0 1.5px var(--c)}
+.ev.start{background:transparent;color:var(--c);box-shadow:inset 0 0 0 1.5px var(--c);border-style:dashed;font-style:italic}
+.more{font-size:.7rem;color:var(--muted);margin-top:2px}
+.key{display:flex;flex-wrap:wrap;gap:.3rem 1rem;color:var(--muted);font-size:.8rem;margin-top:.7rem}
+.key i{display:inline-block;width:1.4rem;height:.7rem;border-radius:3px;vertical-align:middle;margin-right:.35rem;background:var(--text)}
+.key i.away{background:transparent;box-shadow:inset 0 0 0 1.5px var(--text)}
+.key i.start{background:transparent;box-shadow:inset 0 0 0 1.5px var(--text);border:1px dashed var(--bg)}
+.list h3{margin:1.1rem 0 .4rem;font-size:.95rem;color:var(--muted);font-weight:700}
+.list h3:first-child{margin-top:0}
+.row{display:flex;gap:.8rem;align-items:baseline;padding:.5rem .2rem;border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left}
+.row:hover{background:var(--bg)}
+.row .d{min-width:6.2rem;color:var(--muted);font-size:.88rem}
+.row .tag{display:inline-block;min-width:7.2rem;font-weight:700;color:var(--c);font-size:.9rem}
+.row .what{flex:1;min-width:0}
+.row .where{font-size:.8rem;font-weight:700;color:var(--muted)}
+.empty{color:var(--muted);padding:1rem .2rem}
+dialog{border:1px solid var(--line2);border-radius:14px;background:var(--surface);color:var(--text);padding:1.2rem;width:min(30rem,calc(100% - 2rem))}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+dialog h3{margin:0 0 .15rem;font-size:1.1rem}
+dialog .when{color:var(--muted);margin:0 0 .8rem}
+.item{border-left:4px solid var(--c);padding:.2rem 0 .2rem .7rem;margin:.7rem 0}
+.item b{color:var(--c)}
+.item .meta{color:var(--muted);font-size:.85rem}
+.games{list-style:none;margin:.3rem 0 0;padding:0}
+.games li{padding:.15rem 0;font-size:.92rem}
+.games li.us{font-weight:700}
+.games li.us::after{content:"  (us)";color:var(--muted);font-weight:500}
+.form label{display:block;margin:.6rem 0 .2rem;font-size:.85rem;color:var(--muted)}
+.form input,.form textarea{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:.5rem .6rem}
+.actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap}
+.foot{margin-top:1.2rem;color:var(--muted);font-size:.8rem}
+@media (max-width:640px){
+  .day{min-height:64px;padding:3px}
+  .ev{font-size:.62rem;padding:0 3px}
+  .nav h2{min-width:0;flex:1}
+  .row{flex-wrap:wrap}
+}
+@media print{
+  :root{--bg:#fff;--surface:#fff;--line:#ccc;--line2:#999;--text:#000;--muted:#444;--ink:#fff;
+    --c-volleyball:#2a5caa;--c-soccer:#1a6b4a;--c-xc:#92750a;--c-wrestling:#b83030;--c-girlsbb:#7a4cb0;--c-boysbb:#b5651d;--c-track:#1b7f86;--c-custom:#5a5855}
+  .noprint{display:none!important}
+  .day{min-height:80px;break-inside:avoid}
+  .ev{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>IMS Sports Calendar</h1>
+      <div class="sub" id="sub">2026-27 middle school sports</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg noprint" role="group" aria-label="View">
+      <button type="button" id="vMonth" aria-pressed="true">Month</button>
+      <button type="button" id="vList" aria-pressed="false">List</button>
+    </div>
+    <button type="button" class="btn noprint" id="addBtn">+ Add event</button>
+    <button type="button" class="btn noprint" id="icsBtn" title="Download these games as a calendar file you can import into Outlook">Download .ics</button>
+    <button type="button" class="btn noprint" id="printBtn">Print</button>
+  </header>
+
+  <div class="filters noprint" id="filters" aria-label="Filters">
+    <select id="scope" aria-label="Which games">
+      <option value="us">Issaquah Middle games</option>
+      <option value="all">All league games</option>
+    </select>
+    <select id="where" aria-label="Home or away">
+      <option value="">Home and away</option>
+      <option value="home">Home only</option>
+      <option value="away">Away only</option>
+    </select>
+    <span id="chips"></span>
+  </div>
+
+  <div class="panel">
+    <div id="monthView">
+      <div class="nav noprint">
+        <button type="button" class="btn" id="prev" aria-label="Previous month">&larr;</button>
+        <h2 id="title"></h2>
+        <button type="button" class="btn" id="next" aria-label="Next month">&rarr;</button>
+        <button type="button" class="btn" id="today">Today</button>
+      </div>
+      <div class="head" id="head"></div>
+      <div class="grid" id="grid"></div>
+      <div class="key">
+        <span><i></i>Home game</span>
+        <span><i class="away"></i>Away game</span>
+        <span><i class="start"></i>Season starts</span>
+      </div>
+    </div>
+    <div id="listView" class="list" hidden></div>
+  </div>
+
+  <p class="foot">Typed in from the league schedules. Times are start times as listed, and schedules can change, so check with the coach. Extra events you add are kept only in this browser. Nothing leaves your computer.</p>
+</div>
+
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- the schedule data ----------
+   A@B means A visits B (B is home).
+   PL Pine Lake, BL Beaver Lake, PC Pacific Cascade, IM Issaquah Middle, CM Cougar Mountain, MW Maywood */
+const TEAMS = { PL:'Pine Lake', BL:'Beaver Lake', PC:'Pacific Cascade', IM:'Issaquah Middle', CM:'Cougar Mountain', MW:'Maywood' };
+const SHORT_TEAM = { PL:'Pine Lake', BL:'Beaver Lake', PC:'Pac Cascade', IM:'Issaquah', CM:'Cougar Mtn', MW:'Maywood' };
+const US = 'IM';
+
+const SPORTS = {
+  volleyball:{ name:'Volleyball', color:'--c-volleyball', time:'3:15 p.m.', start:['2026-09-08','Volleyball season starts'], games:`
+2026-09-22|V/JV|PL@BL;PC@IM;CM@MW
+2026-09-24|JV/V|BL@CM;IM@MW;PL@PC
+2026-09-29|V/JV|IM@BL;MW@PC;CM@PL
+2026-10-01|JV/V|PC@BL;CM@IM;MW@PL
+2026-10-06|V/JV|PC@CM;PL@IM;BL@MW
+2026-10-08|JV/V|MW@CM;IM@PC;BL@PL
+2026-10-13|V/JV|CM@BL;MW@IM;PC@PL
+2026-10-15|JV/V|PC@MW;PL@CM;BL@IM
+2026-10-20|JV/V|IM@CM;PL@MW;BL@PC
+2026-10-22|V/JV|MW@BL;CM@PC;IM@PL` },
+  soccer:{ name:'Boys Soccer', short:'Soccer', color:'--c-soccer', time:'3:15 p.m.', start:['2026-09-08','Boys Soccer season starts'], games:`
+2026-09-22|V/JV|PL@BL;PC@IM;CM@MW
+2026-09-24|JV/V|BL@CM;IM@MW;PL@PC
+2026-09-29|V/JV|IM@BL;MW@PC;CM@PL
+2026-10-01|JV/V|PC@BL;CM@IM;MW@PL
+2026-10-06|V/JV|PC@CM;PL@IM;BL@MW
+2026-10-08|JV/V|MW@CM;IM@PC;BL@PL
+2026-10-13|V/JV|CM@BL;MW@IM;PC@PL
+2026-10-15|JV/V|PC@MW;PL@CM;BL@IM
+2026-10-20|JV/V|IM@CM;PL@MW;BL@PC
+2026-10-22|V/JV|MW@BL;CM@PC;IM@PL` },
+  xc:{ name:'Cross Country', short:'XC', color:'--c-xc', time:'3:15 to 3:30 p.m.', start:['2026-09-08','Cross Country first practice'], games:`
+2026-09-24||CM@BL;MW@IM;PC@PL
+2026-10-01||IM@CM;PL@MW;BL@PC
+2026-10-08||PL@BL;PC@IM;CM@MW
+2026-10-15||IM@BL;MW@PC;CM@PL
+2026-10-22||PC@CM;PL@IM;BL@MW` },
+  wrestling:{ name:'Wrestling', color:'--c-wrestling', time:'3:15 p.m. / 3:30 p.m.', practices:8, start:['2026-11-02','Wrestling season starts'], games:`
+2026-11-17|V/JV|PL@BL;PC@IM;CM@MW
+2026-11-19|V/JV|BL@CM;IM@MW;PL@PC
+2026-12-01|V/JV|IM@BL;MW@PC;CM@PL
+2026-12-03|V/JV|PC@BL;CM@IM;MW@PL
+2026-12-08|V/JV|PC@CM;PL@IM;BL@MW
+2026-12-10|JV/V|MW@CM;IM@PC;BL@PL
+2026-12-15|V/JV|CM@BL;MW@IM;PC@PL
+2026-12-17|V/JV|PL@CM;BL@IM;PC@MW
+2027-01-07|V/JV|MW@BL;CM@PC;IM@PL
+2027-01-12|V/JV|IM@CM;PL@MW;BL@PC` },
+  girlsbb:{ name:'Girls Basketball', short:'Girls BB', color:'--c-girlsbb', time:'3:15 / 3:30 p.m.', practices:8, start:['2026-11-02','Girls Basketball season starts'], games:`
+2026-11-17|V/JV|MW@CM;IM@PC;BL@PL
+2026-11-19|JV/V|CM@BL;MW@IM;PC@PL
+2026-12-01|V/JV|PL@CM;BL@IM;PC@MW
+2026-12-03|JV/V|IM@CM;PL@MW;BL@PC
+2026-12-08|V/JV|MW@BL;CM@PC;IM@PL
+2026-12-10|JV/V|PL@BL;PC@IM;CM@MW
+2026-12-15|V/JV|BL@CM;IM@MW;PL@PC
+2026-12-17|JV/V|IM@BL;MW@PC;CM@PL
+2027-01-07|JV/V|PC@CM;PL@IM;BL@MW
+2027-01-12|V/JV|PC@BL;CM@IM;MW@PL` },
+  boysbb:{ name:'Boys Basketball', short:'Boys BB', color:'--c-boysbb', time:'3:15 / 3:30 p.m.', practices:8, start:['2027-01-26','Boys Basketball season starts'], games:`
+2027-02-09|V/JV|MW@CM;IM@PC;BL@PL
+2027-02-11|JV/V|CM@BL;MW@IM;PC@PL
+2027-02-23|V/JV|PL@CM;BL@IM;PC@MW
+2027-02-25|JV/V|IM@CM;PL@MW;BL@PC
+2027-03-02|V/JV|MW@BL;CM@PC;IM@PL
+2027-03-04|JV/V|PL@BL;PC@IM;CM@MW
+2027-03-09|V/JV|BL@CM;IM@MW;PL@PC
+2027-03-16|JV/V|IM@BL;MW@PC;CM@PL
+2027-03-18|JV/V|PC@CM;PL@IM;BL@MW
+2027-03-23|V/JV|PC@BL;CM@IM;MW@PL` },
+  track:{ name:'Track', color:'--c-track', time:'3:15 p.m. / 3:30 p.m.', practices:8, start:['2027-04-05','Track season starts'], games:`
+2027-04-29||IM@BL;PL@MW;CM@PC
+2027-05-06||PL@BL;CM@IM;PC@MW
+2027-05-13||MW@CM;BL@PC;IM@PL
+2027-05-20||BL@CM;IM@MW;PC@PL
+2027-05-27||MW@BL;PC@IM;CM@PL` }
+};
+
+/* One record per sport per date: { id, date, sport, level, games:[[away,home],...], kind } */
+const EVENTS = [];
+for (const [key, s] of Object.entries(SPORTS)){
+  const [sd, sl] = s.start;
+  EVENTS.push({ id: key + ':start', date: sd, sport: key, kind: 'start', label: sl });
+  s.games.trim().split('\n').forEach(line => {
+    const [date, level, gs] = line.split('|');
+    EVENTS.push({ id: key + ':' + date, date, sport: key, kind: 'game', level,
+      games: gs.split(';').map(g => g.split('@')) });
+  });
+}
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)){
+    if (v == null) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)){ if (kid == null) continue; e.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
+  return e;
+}
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const longDate = s => { const d = parse(s); return `${DAYS_LONG[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; };
+const shortDate = s => { const d = parse(s); return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`; };
+
+function readJSON(k){ try { return JSON.parse(localStorage.getItem(k)); } catch (e){ return null; } }
+function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e){} }
+const PREFS_KEY = 'imscal:v1:prefs';
+const CUSTOM_KEY = 'imscal:v1:custom';
+
+/* ---------- state ---------- */
+const FIRST = '2026-09-01', LAST = '2027-05-31';
+const todayStr = iso(new Date());
+const prefs = Object.assign({ scope: 'us', where: '', off: [], view: 'month' }, readJSON(PREFS_KEY) || {});
+let custom = Array.isArray(readJSON(CUSTOM_KEY)) ? readJSON(CUSTOM_KEY) : [];
+let cur = (() => { const t = parse(todayStr); const inRange = todayStr >= FIRST && todayStr <= LAST; const d = inRange ? t : parse(FIRST); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+
+const savePrefs = () => writeJSON(PREFS_KEY, prefs);
+const ourGame = ev => ev.games.find(g => g.includes(US));
+const isHome = g => g[1] === US;
+const opponent = g => TEAMS[g[0] === US ? g[1] : g[0]];
+const opponentShort = g => SHORT_TEAM[g[0] === US ? g[1] : g[0]];
+
+/* what is on the calendar right now (after filters) */
+function visibleEvents(){
+  const out = [];
+  for (const ev of EVENTS){
+    if (prefs.off.includes(ev.sport)) continue;
+    if (ev.kind === 'start'){ out.push(ev); continue; }
+    if (prefs.scope === 'us'){
+      const g = ourGame(ev);
+      if (prefs.where === 'home' && !isHome(g)) continue;
+      if (prefs.where === 'away' && isHome(g)) continue;
+    }
+    out.push(ev);
+  }
+  for (const c of custom) out.push({ id: c.id, date: c.date, sport: 'custom', kind: 'custom', label: c.title, note: c.note });
+  return out;
+}
+const byDate = evs => { const m = new Map(); for (const e of evs){ if (!m.has(e.date)) m.set(e.date, []); m.get(e.date).push(e); } return m; };
+const sortEv = (a, b) => (a.kind === 'custom') - (b.kind === 'custom') || a.sport.localeCompare(b.sport);
+const shortName = k => SPORTS[k].short || SPORTS[k].name;
+const colorVar = e => e.kind === 'custom' ? '--c-custom' : SPORTS[e.sport].color;
+
+function chipText(ev){
+  if (ev.kind === 'start' || ev.kind === 'custom') return ev.label;
+  const s = SPORTS[ev.sport];
+  if (prefs.scope === 'us'){ const g = ourGame(ev); return `${shortName(ev.sport)} ${isHome(g) ? 'vs' : '@'} ${opponentShort(g)}`; }
+  return `${shortName(ev.sport)} (3 games)`;
+}
+function chipClass(ev){
+  if (ev.kind === 'start') return 'ev start';
+  if (ev.kind === 'game' && prefs.scope === 'us') return 'ev' + (isHome(ourGame(ev)) ? '' : ' away');
+  return 'ev';
+}
+
+/* ---------- drawing ---------- */
+function drawFilters(){
+  $('scope').value = prefs.scope;
+  $('where').value = prefs.where;
+  $('where').disabled = prefs.scope !== 'us';
+  $('chips').replaceChildren(...Object.entries(SPORTS).map(([k, s]) => {
+    const b = el('button', { type: 'button', class: 'chip', 'aria-pressed': String(!prefs.off.includes(k)), text: s.name, style: `--c:var(${s.color})` });
+    b.addEventListener('click', () => { prefs.off = prefs.off.includes(k) ? prefs.off.filter(x => x !== k) : prefs.off.concat(k); savePrefs(); draw(); });
+    return b;
+  }));
+  $('sub').textContent = prefs.scope === 'us' ? '2026-27 Issaquah Middle games' : '2026-27 all league games';
+}
+
+function drawMonth(map){
+  const y = cur.getFullYear(), m = cur.getMonth();
+  $('title').textContent = `${MONTHS[m]} ${y}`;
+  $('prev').disabled = iso(new Date(y, m, 0)) < FIRST;
+  $('next').disabled = iso(new Date(y, m + 1, 1)) > LAST;
+  $('head').replaceChildren(...DAYS.map(d => el('span', { text: d })));
+  const first = new Date(y, m, 1);
+  const start = new Date(y, m, 1 - first.getDay());
+  const weeks = Math.ceil((first.getDay() + new Date(y, m + 1, 0).getDate()) / 7);
+  const cells = [];
+  for (let i = 0; i < weeks * 7; i++){
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const s = iso(d);
+    const evs = (map.get(s) || []).slice().sort(sortEv);
+    const cls = ['day'];
+    if (d.getMonth() !== m) cls.push('other');
+    if (s === todayStr) cls.push('today');
+    if (s < todayStr) cls.push('past');
+    const shown = evs.slice(0, 3);
+    const cell = el('button', { type: 'button', class: cls.join(' '), 'aria-label': `${longDate(s)}${evs.length ? ', ' + evs.length + ' item' + (evs.length === 1 ? '' : 's') : ''}` },
+      el('span', { class: 'n', text: String(d.getDate()) }),
+      shown.map(e => el('span', { class: chipClass(e), style: `--c:var(${colorVar(e)})`, text: chipText(e), title: chipText(e) })),
+      evs.length > 3 ? el('div', { class: 'more', text: `+${evs.length - 3} more` }) : null);
+    cell.addEventListener('click', () => openDay(s));
+    cells.push(cell);
+  }
+  $('grid').replaceChildren(...cells);
+}
+
+function drawList(map){
+  const dates = Array.from(map.keys()).sort();
+  const upcoming = dates.filter(d => d >= todayStr);
+  const shownDates = upcoming.length ? upcoming : dates;
+  const box = $('listView');
+  box.replaceChildren();
+  if (!shownDates.length){ box.append(el('div', { class: 'empty', text: 'Nothing to show with these filters.' })); return; }
+  if (upcoming.length === 0) box.append(el('div', { class: 'empty', text: 'The season is over. Showing everything.' }));
+  let month = '';
+  for (const d of shownDates){
+    const dt = parse(d), label = `${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
+    if (label !== month){ month = label; box.append(el('h3', { text: label })); }
+    for (const e of map.get(d).slice().sort(sortEv)){
+      const g = e.kind === 'game' && prefs.scope === 'us' ? ourGame(e) : null;
+      const row = el('button', { type: 'button', class: 'row', style: `--c:var(${colorVar(e)})` },
+        el('span', { class: 'd', text: shortDate(d) + (d === todayStr ? ' (today)' : '') }),
+        el('span', { class: 'tag', text: e.kind === 'custom' ? 'Event' : SPORTS[e.sport].name }),
+        el('span', { class: 'what', text: g ? `${isHome(g) ? 'vs' : '@'} ${opponent(g)}` + (e.level ? `  ·  ${e.level}` : '') : (e.kind === 'game' ? '3 games' : e.label) }),
+        g ? el('span', { class: 'where', text: isHome(g) ? 'HOME' : 'AWAY' }) : null);
+      row.addEventListener('click', () => openDay(d));
+      box.append(row);
+    }
+  }
+}
+
+function draw(){
+  drawFilters();
+  const map = byDate(visibleEvents());
+  $('monthView').hidden = prefs.view !== 'month';
+  $('listView').hidden = prefs.view !== 'list';
+  $('vMonth').setAttribute('aria-pressed', String(prefs.view === 'month'));
+  $('vList').setAttribute('aria-pressed', String(prefs.view === 'list'));
+  if (prefs.view === 'month') drawMonth(map); else drawList(map);
+}
+
+/* ---------- day detail ---------- */
+const dlg = $('dlg');
+function closeDlg(){ if (dlg.open) dlg.close(); }
+function showDlg(nodes){ $('dlgBody').replaceChildren(...nodes); if (!dlg.open) dlg.showModal(); }
+dlg.addEventListener('click', e => { if (e.target === dlg) closeDlg(); });
+
+function openDay(s){
+  const evs = visibleEvents().filter(e => e.date === s).sort(sortEv);
+  const body = [el('h3', { text: longDate(s) }), el('p', { class: 'when', text: s === todayStr ? 'Today' : (s < todayStr ? 'Past' : '') || ' ' })];
+  if (!evs.length) body.push(el('p', { class: 'empty', text: 'Nothing scheduled with these filters.' }));
+  for (const e of evs){
+    if (e.kind === 'custom'){
+      body.push(el('div', { class: 'item', style: '--c:var(--c-custom)' },
+        el('b', { text: e.label }),
+        e.note ? el('div', { class: 'meta', text: e.note }) : null,
+        el('div', { class: 'actions' }, el('button', { type: 'button', class: 'btn', text: 'Delete', onclick: () => { custom = custom.filter(c => c.id !== e.id); writeJSON(CUSTOM_KEY, custom); draw(); openDay(s); } }))));
+      continue;
+    }
+    const sp = SPORTS[e.sport];
+    if (e.kind === 'start'){
+      body.push(el('div', { class: 'item', style: `--c:var(${sp.color})` },
+        el('b', { text: e.label }),
+        sp.practices ? el('div', { class: 'meta', text: `Practices: ${sp.practices}` }) : null));
+      continue;
+    }
+    const lis = e.games.map(g => {
+      const us = g.includes(US);
+      return el('li', { class: us ? 'us' : '' }, `${TEAMS[g[0]]} @ ${TEAMS[g[1]]}`);
+    });
+    // our game first
+    lis.sort((a, b) => (b.className === 'us') - (a.className === 'us'));
+    const g = ourGame(e);
+    body.push(el('div', { class: 'item', style: `--c:var(${sp.color})` },
+      el('b', { text: sp.name }),
+      el('div', { class: 'meta', text: `${g ? (isHome(g) ? 'Home game' : 'Away at ' + TEAMS[g[1]]) + '  ·  ' : ''}${e.level ? e.level + '  ·  ' : ''}Start ${sp.time}` }),
+      el('ul', { class: 'games' }, prefs.scope === 'us' ? lis.filter(li => li.className === 'us') : lis)));
+  }
+  body.push(el('div', { class: 'actions' },
+    el('button', { type: 'button', class: 'btn', text: 'Add event on this day', onclick: () => openAdd(s) }),
+    el('button', { type: 'button', class: 'btn primary', text: 'Close', onclick: closeDlg })));
+  showDlg(body);
+}
+
+/* ---------- add your own event ---------- */
+function openAdd(date){
+  const title = el('input', { type: 'text', id: 'evTitle', maxlength: '80', autocomplete: 'off', placeholder: 'For example: Spirit Week kickoff' });
+  const day = el('input', { type: 'date', id: 'evDate', value: date || todayStr });
+  const note = el('textarea', { id: 'evNote', rows: '2', maxlength: '200', placeholder: 'Optional note' });
+  const err = el('div', { class: 'meta', style: 'color:var(--c-wrestling)' });
+  const save = () => {
+    const t = title.value.trim();
+    if (!t){ err.textContent = 'Give it a title.'; title.focus(); return; }
+    if (!day.value){ err.textContent = 'Pick a date.'; return; }
+    custom.push({ id: 'c' + Date.now() + Math.floor(Math.random() * 1000), title: t, date: day.value, note: note.value.trim() });
+    writeJSON(CUSTOM_KEY, custom);
+    const d = parse(day.value); cur = new Date(d.getFullYear(), d.getMonth(), 1);
+    closeDlg(); draw();
+  };
+  title.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); save(); } });
+  showDlg([
+    el('h3', { text: 'Add an event' }),
+    el('div', { class: 'form' },
+      el('label', { for: 'evTitle', text: 'Title' }), title,
+      el('label', { for: 'evDate', text: 'Date' }), day,
+      el('label', { for: 'evNote', text: 'Note' }), note, err),
+    el('div', { class: 'actions' },
+      el('button', { type: 'button', class: 'btn', text: 'Cancel', onclick: closeDlg }),
+      el('button', { type: 'button', class: 'btn primary', text: 'Save', onclick: save }))
+  ]);
+  title.focus();
+}
+
+/* ---------- calendar file (.ics): all-day entries, so no times or lengths are invented ---------- */
+const icsEsc = t => String(t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+function buildIcs(evs){
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//IMS ASB//Sports Calendar//EN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:IMS Sports'];
+  for (const e of evs){
+    let sum, desc = '';
+    if (e.kind === 'custom'){ sum = e.label; desc = e.note || ''; }
+    else if (e.kind === 'start'){ sum = e.label; }
+    else {
+      const s = SPORTS[e.sport];
+      if (prefs.scope === 'us'){ const g = ourGame(e); sum = `${s.name} ${isHome(g) ? 'vs' : '@'} ${opponent(g)} (${s.time.split(' ')[0]} p.m.)`; desc = `${isHome(g) ? 'Home game' : 'Away game'}${e.level ? ', ' + e.level : ''}. Start ${s.time}.`; }
+      else { sum = `${s.name} league games`; desc = e.games.map(g => `${TEAMS[g[0]]} @ ${TEAMS[g[1]]}`).join('\n') + `\nStart ${s.time}.`; }
+    }
+    const d = parse(e.date), n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    L.push('BEGIN:VEVENT', `UID:${e.id.replace(/[^A-Za-z0-9:-]/g, '')}-${prefs.scope}@ims-asb-calendar`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${e.date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${iso(n).replace(/-/g, '')}`,
+      `SUMMARY:${icsEsc(sum)}`, desc ? `DESCRIPTION:${icsEsc(desc)}` : null, 'END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return L.filter(Boolean).join('\r\n') + '\r\n';
+}
+function downloadIcs(){
+  const evs = visibleEvents().sort((a, b) => a.date.localeCompare(b.date));
+  const blob = new Blob([buildIcs(evs)], { type: 'text/calendar' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: 'ims-sports-calendar.ics' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---------- wiring ---------- */
+$('scope').addEventListener('change', e => { prefs.scope = e.target.value; savePrefs(); draw(); });
+$('where').addEventListener('change', e => { prefs.where = e.target.value; savePrefs(); draw(); });
+$('vMonth').addEventListener('click', () => { prefs.view = 'month'; savePrefs(); draw(); });
+$('vList').addEventListener('click', () => { prefs.view = 'list'; savePrefs(); draw(); });
+$('prev').addEventListener('click', () => { cur = new Date(cur.getFullYear(), cur.getMonth() - 1, 1); draw(); });
+$('next').addEventListener('click', () => { cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); draw(); });
+$('today').addEventListener('click', () => { const t = parse(todayStr); const inRange = todayStr >= FIRST && todayStr <= LAST; const d = inRange ? t : parse(FIRST); cur = new Date(d.getFullYear(), d.getMonth(), 1); draw(); });
+$('addBtn').addEventListener('click', () => openAdd());
+$('icsBtn').addEventListener('click', downloadIcs);
+$('printBtn').addEventListener('click', () => { prefs.view = 'month'; draw(); window.print(); });
+document.addEventListener('keydown', e => {
+  if (dlg.open || /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) return;
+  if (e.key === 'ArrowLeft' && !$('prev').disabled && prefs.view === 'month'){ $('prev').click(); }
+  else if (e.key === 'ArrowRight' && !$('next').disabled && prefs.view === 'month'){ $('next').click(); }
+});
+
+draw();
+})();
+</script>
+</body>
+</html>

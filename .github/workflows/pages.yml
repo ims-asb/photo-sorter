@@ -21,7 +21,7 @@ jobs:
       - name: Keep only the site files
         run: |
           mkdir site
-          cp index.html site/
+          cp index.html calendar.html site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
