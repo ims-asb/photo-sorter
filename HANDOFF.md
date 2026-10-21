@@ -140,3 +140,7 @@ The start screen has a three-step strip (add photos, arrows keep or reject, Fini
 
 ## 20. Sports calendar (calendar.html, Oct 14)
 Separate single page at /calendar.html (same repo, same hub dark palette, light mode follows the computer). Luke supplied 7 league schedule pictures (volleyball, boys soccer, cross country, wrestling, girls basketball, boys basketball, track, 2026-27). Games are typed into the page as compact lines (A@B means A visits B). Issaquah Middle (IM) is us. Features: month grid and list view, Issaquah-only or all league games, home or away filter, sport chips, season start dates, click a day for details, add your own events (kept in this browser only), Download .ics (all-day entries so no times or lengths are invented; imports into Outlook), print. No network. The Pages workflow now copies calendar.html too. Tests: tests/test_calendar_data.js (weekdays, each team once per date, full round robins; all pass) and tests/calendar_chromium.js (real browser). Limits: typed from pictures, so recheck against the originals; no times beyond what each schedule lists; the pictures may not include playoffs or later dates.
+
+
+## 21. Undo tip (Oct 21)
+Clicking the Undo button with the mouse shows a small tip in the top bar for 4 seconds: "Tip: press Ctrl+Z or S to undo". It stops showing once the person has used the keyboard undo. Test: tests/test_undotip.js. Also fixed a flaky test: test_round2.js read the saved choices before the 250 ms delayed save, so it failed about half the time; it now waits 320 ms.

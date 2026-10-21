@@ -1294,6 +1294,14 @@ function undoAll(){
   render();
 }
 
+let undoTipTimer = null, usedUndoKey = false;
+function showUndoTip(){
+  if (usedUndoKey || state.index === 0 && !state.decisions.some(Boolean)) return;
+  setNote('Tip: press Ctrl+Z or S to undo');
+  clearTimeout(undoTipTimer);
+  undoTipTimer = setTimeout(() => setNote(noteText()), 4000);
+}
+
 function undo(){
   if (state.saving || state.index === 0) return;
   if (state.mode === 'panel'){
@@ -1617,7 +1625,7 @@ function bindSortControls(){
   $('editBtn').addEventListener('click', e => { decide('keep', true); e.currentTarget.blur(); });
   $('gotoBtn').addEventListener('click', e => { openGoTo(); e.currentTarget.blur(); });
   $('undoAllBtn').addEventListener('click', e => { undoAllAsk(); e.currentTarget.blur(); });
-  $('undoBtn').addEventListener('click', e => { undo(); e.currentTarget.blur(); });
+  $('undoBtn').addEventListener('click', e => { undo(); showUndoTip(); e.currentTarget.blur(); });
   $('finishBtn').addEventListener('click', openFinish);
   $('endFinishBtn').addEventListener('click', openFinish);
 
@@ -1633,7 +1641,7 @@ function bindSortControls(){
 
     const canUndo = state.mode === 'sort' || (state.mode === 'panel' && state.panelKind === 'finish');
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key || '').toLowerCase() === 'z'){
-      if (canUndo){ e.preventDefault(); if (!e.repeat) undo(); }
+      if (canUndo){ e.preventDefault(); if (!e.repeat){ usedUndoKey = true; undo(); } }
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey || state.mode !== 'sort') return;
@@ -1649,7 +1657,7 @@ function bindSortControls(){
     else if (e.key === '?'){ e.preventDefault(); openHelp(); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp' || k === 'w'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
-    else if (k === 's' && !e.shiftKey){ e.preventDefault(); if (!e.repeat) undo(); }
+    else if (k === 's' && !e.shiftKey){ e.preventDefault(); if (!e.repeat){ usedUndoKey = true; undo(); } }
   });
 }
 

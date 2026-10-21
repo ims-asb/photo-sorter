@@ -34,7 +34,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   key('ArrowLeft');    // c reject
   key('ArrowRight');   // d keep
   key('ArrowLeft');    // e reject
-  await sleep(30);
+  await sleep(320);   // saved choices are written after a short delay (250 ms)
   check('finish offers round 2', !!btn(/Next: sort the kept photos into categories/));
   const saved1 = win.localStorage.getItem('photosorter:v2:decisions');
   btn(/Next: sort/).click(); await sleep(10);
