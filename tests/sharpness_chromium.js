@@ -24,13 +24,15 @@ p=await b.newPage({viewport:{width:1200,height:800}});
 await p.goto('file:///home/user/photo-sorter/index.html?passes=1');
 await p.evaluate(()=>{document.querySelector('details.more').open=true});
 await p.check('#softFirstInput');
-const t=Date.now();
 await p.setInputFiles('#fileInput',files);
 await p.waitForSelector('#sort:not([hidden])',{timeout:60000});
-console.log('sharpness check of 10 photos took',Date.now()-t,'ms');
 await p.waitForFunction(()=>{const im=document.getElementById('photo');return im.complete&&im.naturalWidth>0});
-const first=await p.textContent('#fname'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(300); const second=await p.textContent('#fname');
-ok('blurriest photos come first', /blur/.test(first)&&/blur/.test(second), [first,second]);
+const names=[]; names.push(await p.textContent('#fname'));
+await p.waitForTimeout(2500);   // the background check finishes
+for(let i=0;i<3;i++){ await p.keyboard.press('ArrowRight'); await p.waitForTimeout(400); names.push(await p.textContent('#fname')); }
+console.log(names.join(' -> '));
+ok('starts at once in normal order', /IMG_00/.test(names[0]), names[0]);
+ok('then the blurriest photos come up next', /blur/.test(names[1]) && /blur/.test(names[2]), names);
 await p.screenshot({path:'/tmp/claude-0/pw/sharp/soft.png'});
 ok('no errors', errs.length===0, errs);
 console.log(fails?fails+' FAILED':'ALL PASSED'); await b.close(); process.exit(fails?1:0);

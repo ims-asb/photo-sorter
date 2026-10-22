@@ -212,7 +212,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <label class="check"><input type="checkbox" id="twoPassInput" checked>
       <span>Two passes: a quick cull first, then label what is left <small>Recommended. Skipped if you type categories above.</small></span></label>
     <label class="check"><input type="checkbox" id="softFirstInput">
-      <span>Show the blurriest photos first <small>Checks every photo before you start. It adds a short wait on big batches.</small></span></label>
+      <span>Show the blurriest photos first <small>Checked in the background while you sort. The softest photos move up front after a short while.</small></span></label>
 
     <div class="field">
       <label for="sortInput">Show the photos in this order</label>
@@ -302,6 +302,8 @@ const $ = id => document.getElementById(id);
 const state = {
   sourceHandles: [],  // real file and folder handles, kept so the next visit can pick up
   tagsText: '',
+  softFirst: false,
+  pendingReorder: false,
   twoPass: false,    // pass 1 is a quick cull, pass 2 picks the best
   skipPass2: false,
   originalCount: 0,  // photos before pass 1 threw some out
@@ -994,7 +996,7 @@ async function ingest(handles, opts){
   writeJSON(SETTINGS_KEY, { sort: state.sortBy, twoPass: $('twoPassInput').checked, softFirst: $('softFirstInput').checked });
 
   built.items.forEach((it, i) => { it.orderIdx = i; });
-  if ($('softFirstInput').checked){ setBusy(true); built.items = await orderBySharpness(built.items); setBusy(false); }
+  state.softFirst = $('softFirstInput').checked;
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
   state.pairsSkipped = built.pairsSkipped;
@@ -1037,6 +1039,7 @@ async function addMore(handles){
   if (state.mode === 'panel') closePanel();
   if (wasAtEnd) state.index = oldLen;
   setNote(`Added ${built.items.length} photo${built.items.length === 1 ? '' : 's'}`);
+  if (state.round === 1 && state.softFirst) scoreInBackground();
   render();
 }
 
@@ -1061,6 +1064,7 @@ function openResumePanel(restored, resumeAt){
 }
 
 function resetToStart(){
+  scoreToken++;
   state.mode = 'start';
   state.items = [];
   state.decisions = [];
@@ -1122,22 +1126,37 @@ function updateSoftBadge(){
   const it = state.items[state.index];
   $('softBadge').hidden = !(it && state.mode === 'sort' && isSoft(it.key));
 }
-async function orderBySharpness(items){
-  const scored = new Array(items.length);
-  let next = 0, done = 0;
+/* Scores every photo in the background while you sort (4 at a time). When it finishes, the photos you
+   have not reviewed yet move so the softest come first. The move happens right after a decision,
+   so the photo you are looking at never changes under you. */
+let scoreToken = 0;
+async function scoreInBackground(){
+  const token = ++scoreToken;
+  const items = state.items.slice();
+  let next = state.index;
   const worker = async () => {
-    while (next < items.length){
-      const i = next++;
+    while (token === scoreToken && next < items.length){
+      const it = items[next++];
+      if (sharp.has(it.key)) continue;
       let v = null;
-      try { v = await sharpnessOf((await photoBlob(items[i])).blob); } catch (e){}
-      if (v != null) sharp.set(items[i].key, v);
-      scored[i] = [items[i], v, i];
-      setStartMsg(`Checking sharpness: ${++done} of ${items.length}…`);
+      try { v = await sharpnessOf((await photoBlob(it)).blob); } catch (e){}
+      if (v != null) sharp.set(it.key, v);
     }
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
-  setStartMsg('');
-  return scored.sort((a, b) => (a[1] == null) - (b[1] == null) || (a[1] ?? 0) - (b[1] ?? 0) || a[2] - b[2]).map(x => x[0]);
+  if (token === scoreToken && state.round === 1) state.pendingReorder = true;
+}
+function reorderRemaining(){
+  state.pendingReorder = false;
+  const slots = [];
+  for (let i = state.index; i < state.items.length; i++) if (!state.decisions[i]) slots.push(i);
+  if (slots.length < 2) return;
+  const moved = slots.map(i => state.items[i]).sort((a, b) => {
+    const va = sharp.get(a.key), vb = sharp.get(b.key);
+    return (va == null) - (vb == null) || (va ?? 0) - (vb ?? 0) || (a.orderIdx ?? 0) - (b.orderIdx ?? 0);
+  });
+  slots.forEach((i, k) => { state.items[i] = moved[k]; });
+  clearCache();
 }
 
 function ensureUrl(i){
@@ -1203,6 +1222,7 @@ async function showPhoto(i){
 /* ---------- sorting ---------- */
 
 function beginSorting(startAt){
+  if (state.round === 1 && state.softFirst) scoreInBackground();
   state.index = startAt;
   state.mode = 'sort';
   $('start').hidden = true;
@@ -1261,6 +1281,7 @@ function decide(code, edit){
   store[state.items[state.index].key] = full;
   persist();
   state.index++;
+  if (state.pendingReorder && state.round === 1) reorderRemaining();
   render();
   if (state.index >= state.items.length) openFinish();
 }
@@ -1342,6 +1363,7 @@ function startRound2(tags){
   });
   if (!keepers.length) return;
   keepers.sort((a, b) => (a.orderIdx ?? 0) - (b.orderIdx ?? 0));   // pass 2 goes back to the normal order
+  scoreToken++;
   state.originalCount = state.items.length;
   roundOneStore = store;
   store = {};
