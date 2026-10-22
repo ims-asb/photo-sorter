@@ -28,23 +28,29 @@ async function load(){
 }
 (async () => {
   // default flow
-  let { $, key, btn, dest, add } = await load();
+  let { doc, $, key, btn, dest, add } = await load();
   check('two passes is on by default', $('twoPassInput').checked);
   $('eventInput').value = 'Games';
   await add(['a','b','c','d','e']);
   check('pass 1 note', /Pass 1 of 2/.test($('note').textContent), $('note').textContent);
   key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowLeft'); await sleep(40);
   check('pass 1 ends with the pass 2 offer', /Pass 1 done/.test($('sheet').textContent) && /4 of 5 photos are left/.test($('sheet').textContent), $('sheet').textContent.slice(0, 120));
+  check('pass 2 offer asks for categories', !!$('round2Tags'));
+  btn(/Start pass 2/).click(); await sleep(20);
+  check('pass 2 will not start without categories', /Pass 1 done/.test($('sheet').textContent));
+  $('round2Tags').value = 'Soccer, Volleyball';
   btn(/Start pass 2/).click(); await sleep(20);
   check('pass 2 has only the 4 survivors', $('count').textContent === '1 of 4', $('count').textContent);
-  check('pass 2 note', /Pass 2 of 2/.test($('note').textContent), $('note').textContent);
-  check('no category buttons in plain pass 2', $('grades').hidden);
-  key('ArrowRight'); key('ArrowLeft'); key('ArrowRight'); key('ArrowRight'); await sleep(40);   // a keep, b reject, c keep, d keep
+  check('pass 2 note says label', /Pass 2 of 2: label/.test($('note').textContent), $('note').textContent);
+  check('pass 2 shows the category buttons', doc.querySelectorAll('#tagRow .grade').length === 2 && !$('grades').hidden);
+  key('1'); key('ArrowRight'); key('2'); key('ArrowLeft'); await sleep(40);   // a Soccer, b plain keep, c Volleyball, d dropped
   check('finish after pass 2 (no third pass)', /All photos sorted/.test($('sheet').textContent) && !btn(/Next: sort/), $('sheet').textContent.slice(0, 100));
   btn(/Save sorted/).click(); await sleep(300);
   const out = dest.kids.get('Games - sorted');
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
-  check('saved only the final 3', names(out && out.kids.get('Keep')) === 'a.jpg,c.jpg,d.jpg', names(out && out.kids.get('Keep')));
+  check('Soccer has a', names(out && out.kids.get('Soccer')) === 'a.jpg', names(out && out.kids.get('Soccer')));
+  check('Volleyball has c', names(out && out.kids.get('Volleyball')) === 'c.jpg');
+  check('plain keep has b', names(out && out.kids.get('Keep')) === 'b.jpg');
   check('summary counts both passes', /5 photos in, 3 kept, 2 rejected/.test($('sheet').textContent), $('sheet').textContent);
 
   // skip pass 2
@@ -55,7 +61,8 @@ async function load(){
   btn(/Skip pass 2 and save/).click(); await sleep(20);
   check('skipping goes to the normal finish panel', /All photos sorted/.test($('sheet').textContent) && !!btn(/Save sorted/));
   btn(/Save sorted/).click(); await sleep(300);
-  check('skip saved the 2 kept', names(dest.kids.get('Skip - sorted') && dest.kids.get('Skip - sorted').kids.get('Keep')) === 'a.jpg,c.jpg');
+  const names2 = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
+  check('skip saved the 2 kept', names2(dest.kids.get('Skip - sorted') && dest.kids.get('Skip - sorted').kids.get('Keep')) === 'a.jpg,c.jpg');
 
   // categories typed means one pass; unchecking means one pass
   ({ $, key, btn, dest, add } = await load());

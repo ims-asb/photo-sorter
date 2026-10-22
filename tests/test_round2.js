@@ -44,7 +44,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   $('round2Tags').value = 'Soccer, Volleyball';
   btn(/^Start$/).click(); await sleep(60);
   check('round 2 shows only the 3 kept photos', $('count').textContent === '1 of 3', $('count').textContent);
-  check('round 2 note', /Round 2/.test($('note').textContent), $('note').textContent);
+  check('round 2 note', /Pass 2 of 2: label/.test($('note').textContent), $('note').textContent);
   check('category buttons appear', doc.querySelectorAll('#tagRow .grade').length === 2 && !$('grades').hidden);
   key('1');            // a -> Soccer
   key('2');            // b (flagged in round 1) -> Volleyball + flag

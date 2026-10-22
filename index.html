@@ -210,9 +210,9 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     </div>
 
     <label class="check"><input type="checkbox" id="twoPassInput" checked>
-      <span>Two passes: a quick cull first, then pick the best <small>Recommended for big batches. Skipped if you type categories above.</small></span></label>
+      <span>Two passes: a quick cull first, then label what is left <small>Recommended. Skipped if you type categories above.</small></span></label>
     <label class="check"><input type="checkbox" id="softFirstInput">
-      <span>Show the blurriest photos first <small>Checks every photo before you start, so it takes extra time on big batches.</small></span></label>
+      <span>Show the blurriest photos first <small>Checks every photo before you start. It adds a short wait on big batches.</small></span></label>
 
     <div class="field">
       <label for="sortInput">Show the photos in this order</label>
@@ -742,7 +742,7 @@ function initStart(){
   const s = readJSON(SETTINGS_KEY);
   const oneOnly = new URLSearchParams(location.search).get('passes') === '1';
   $('twoPassInput').checked = oneOnly ? false : !(s && s.twoPass === false);
-  $('softFirstInput').checked = !!(s && s.softFirst);
+  $('softFirstInput').checked = oneOnly ? false : !(s && s.softFirst === false);
   $('tagsInput').value = '';   // the start screen is simple by default: keep or reject only
   if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
   document.querySelectorAll('[data-preset]').forEach(b => {
@@ -941,7 +941,7 @@ async function buildItems(handles, existingKeys, sortBy){
 
 function noteText(){
   const bits = [];
-  if (state.round === 2) bits.push(state.tags.length ? 'Round 2: sort the photos you kept into categories' : 'Pass 2 of 2: pick the best of what is left');
+  if (state.round === 2) bits.push('Pass 2 of 2: label the photos you kept');
   else if (state.twoPass) bits.push('Pass 1 of 2: quick cull. Reject blurry or accidental shots');
   if (state.skippedCamera) bits.push(`${state.skippedCamera} unsupported RAW or HEIC file${state.skippedCamera === 1 ? '' : 's'} skipped`);
   if (state.pairsSkipped) bits.push(`${state.pairsSkipped} RAW file${state.pairsSkipped === 1 ? '' : 's'} skipped because the JPG of the same shot is there`);
@@ -993,6 +993,7 @@ async function ingest(handles, opts){
   state.startedAt = Date.now();
   writeJSON(SETTINGS_KEY, { sort: state.sortBy, twoPass: $('twoPassInput').checked, softFirst: $('softFirstInput').checked });
 
+  built.items.forEach((it, i) => { it.orderIdx = i; });
   if ($('softFirstInput').checked){ setBusy(true); built.items = await orderBySharpness(built.items); setBusy(false); }
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
@@ -1024,6 +1025,7 @@ async function addMore(handles){
   const wasAtEnd = state.index >= state.items.length;
   const oldLen = state.items.length;
   for (const it of built.items){
+    it.orderIdx = state.items.length;
     state.items.push(it);
     state.decisions.push(store[it.key] || null);
   }
@@ -1121,17 +1123,21 @@ function updateSoftBadge(){
   $('softBadge').hidden = !(it && state.mode === 'sort' && isSoft(it.key));
 }
 async function orderBySharpness(items){
-  const scored = [];
-  for (let i = 0; i < items.length; i++){
-    setStartMsg(`Checking sharpness: ${i + 1} of ${items.length}…`);
-    let v = null;
-    try { v = await sharpnessOf((await photoBlob(items[i])).blob); } catch (e){}
-    if (v != null) sharp.set(items[i].key, v);
-    scored.push([items[i], v]);
-    if (i % 8 === 7) await new Promise(r => setTimeout(r, 0));
-  }
+  const scored = new Array(items.length);
+  let next = 0, done = 0;
+  const worker = async () => {
+    while (next < items.length){
+      const i = next++;
+      let v = null;
+      try { v = await sharpnessOf((await photoBlob(items[i])).blob); } catch (e){}
+      if (v != null) sharp.set(items[i].key, v);
+      scored[i] = [items[i], v, i];
+      setStartMsg(`Checking sharpness: ${++done} of ${items.length}…`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
   setStartMsg('');
-  return scored.map((x, i) => [x[0], x[1], i]).sort((a, b) => (a[1] == null) - (b[1] == null) || (a[1] ?? 0) - (b[1] ?? 0) || a[2] - b[2]).map(x => x[0]);
+  return scored.sort((a, b) => (a[1] == null) - (b[1] == null) || (a[1] ?? 0) - (b[1] ?? 0) || a[2] - b[2]).map(x => x[0]);
 }
 
 function ensureUrl(i){
@@ -1301,16 +1307,16 @@ function openRound2(auto){
   const input = el('input', { type: 'text', id: 'round2Tags', autocomplete: 'off', placeholder: 'For example: Volleyball, Soccer, Cross country' });
   const start = () => {
     const tags = parseTags(input.value);
-    if (!tags.length && !auto){ input.focus(); return; }
+    if (!tags.length){ input.focus(); return; }
     startRound2(tags);
   };
   input.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); start(); } });
   openPanel('round2', [
     el('h2', { text: auto ? 'Pass 1 done' : 'Sort into categories' }),
     el('p', { text: auto
-      ? `${left} of ${state.items.length} photos are left. Pass 2: go through them again and pick your best. Nothing is saved yet. Everything is saved at the end, once.`
+      ? `${left} of ${state.items.length} photos are left. Pass 2: label them. Press a number for each photo, or the right arrow for no category. Nothing is saved yet. Everything is saved at the end, once.`
       : 'Next you will go through only the photos you kept, and press a number for each one. Nothing is saved yet. Everything is saved at the end, once.' }),
-    el('label', { for: 'round2Tags', text: auto ? 'Categories for pass 2, separated by commas (optional, up to 8)' : 'Categories, separated by commas (up to 8)' }),
+    el('label', { for: 'round2Tags', text: auto ? 'Categories for pass 2, separated by commas (up to 8)' : 'Categories, separated by commas (up to 8)' }),
     input,
     el('div', { class: 'presets' }, 'Quick fill: ',
       el('button', { class: 'btn ghost', type: 'button', text: 'Sports', onclick: () => { input.value = PRESETS.sports; input.focus(); } }),
@@ -1335,6 +1341,7 @@ function startRound2(tags){
     if (isEdit(state.decisions[i])) flagged.add(it.key);
   });
   if (!keepers.length) return;
+  keepers.sort((a, b) => (a.orderIdx ?? 0) - (b.orderIdx ?? 0));   // pass 2 goes back to the normal order
   state.originalCount = state.items.length;
   roundOneStore = store;
   store = {};
