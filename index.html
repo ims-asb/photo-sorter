@@ -66,6 +66,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
 #zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
+#softBadge{position:absolute;left:1.25rem;top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--grade);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none}
 #fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
 #endMsg h2{margin:0;font-size:1.6rem}
@@ -208,6 +209,11 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
       <small class="hint">Saved on this computer only.</small>
     </div>
 
+    <label class="check"><input type="checkbox" id="twoPassInput" checked>
+      <span>Two passes: a quick cull first, then pick the best <small>Recommended for big batches. Skipped if you type categories above.</small></span></label>
+    <label class="check"><input type="checkbox" id="softFirstInput">
+      <span>Show the blurriest photos first <small>Checks every photo before you start, so it takes extra time on big batches.</small></span></label>
+
     <div class="field">
       <label for="sortInput">Show the photos in this order</label>
       <select id="sortInput">
@@ -240,6 +246,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <img id="photo" alt="">
     <div id="fname"></div>
     <div id="zoomBadge" hidden></div>
+    <div id="softBadge" hidden>Looks soft</div>
     <div id="endMsg" hidden>
       <h2>That was the last photo</h2>
       <div><button id="endFinishBtn" class="btn" type="button">Finish and save</button></div>
@@ -295,6 +302,9 @@ const $ = id => document.getElementById(id);
 const state = {
   sourceHandles: [],  // real file and folder handles, kept so the next visit can pick up
   tagsText: '',
+  twoPass: false,    // pass 1 is a quick cull, pass 2 picks the best
+  skipPass2: false,
+  originalCount: 0,  // photos before pass 1 threw some out
   sourceDir: null,  // writable folder, only when "Choose a folder" was used
   folderName: '',
   eventName: '',
@@ -730,6 +740,9 @@ function initStart(){
   });
   refreshEventOptions();
   const s = readJSON(SETTINGS_KEY);
+  const oneOnly = new URLSearchParams(location.search).get('passes') === '1';
+  $('twoPassInput').checked = oneOnly ? false : !(s && s.twoPass === false);
+  $('softFirstInput').checked = !!(s && s.softFirst);
   $('tagsInput').value = '';   // the start screen is simple by default: keep or reject only
   if (s && (s.sort === 'name' || s.sort === 'time')) $('sortInput').value = s.sort;
   document.querySelectorAll('[data-preset]').forEach(b => {
@@ -928,7 +941,8 @@ async function buildItems(handles, existingKeys, sortBy){
 
 function noteText(){
   const bits = [];
-  if (state.round === 2) bits.push('Round 2: sort the photos you kept into categories');
+  if (state.round === 2) bits.push(state.tags.length ? 'Round 2: sort the photos you kept into categories' : 'Pass 2 of 2: pick the best of what is left');
+  else if (state.twoPass) bits.push('Pass 1 of 2: quick cull. Reject blurry or accidental shots');
   if (state.skippedCamera) bits.push(`${state.skippedCamera} unsupported RAW or HEIC file${state.skippedCamera === 1 ? '' : 's'} skipped`);
   if (state.pairsSkipped) bits.push(`${state.pairsSkipped} RAW file${state.pairsSkipped === 1 ? '' : 's'} skipped because the JPG of the same shot is there`);
   if (state.badZips.length) bits.push(`${state.badZips.length} zip${state.badZips.length === 1 ? '' : 's'} could not be opened`);
@@ -971,11 +985,15 @@ async function ingest(handles, opts){
                   : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
   state.tags = parseTags($('tagsInput').value);
   state.tagsText = $('tagsInput').value;
+  state.twoPass = $('twoPassInput').checked && !state.tags.length;
+  state.skipPass2 = false;
+  state.originalCount = 0;
   state.sourceHandles = handles.filter(isRealHandle);
   state.sortBy = $('sortInput').value;
   state.startedAt = Date.now();
-  writeJSON(SETTINGS_KEY, { sort: state.sortBy });
+  writeJSON(SETTINGS_KEY, { sort: state.sortBy, twoPass: $('twoPassInput').checked, softFirst: $('softFirstInput').checked });
 
+  if ($('softFirstInput').checked){ setBusy(true); built.items = await orderBySharpness(built.items); setBusy(false); }
   state.items = built.items;
   state.skippedCamera = built.skippedCamera;
   state.pairsSkipped = built.pairsSkipped;
@@ -1051,6 +1069,8 @@ function resetToStart(){
   if (state.round === 2 && roundOneStore){ store = roundOneStore; roundOneStore = null; }
   state.round = 1;
   state.flagged = null;
+  state.originalCount = 0;
+  state.skipPass2 = false;
   state.tags = [];
   $('eventInput').value = '';
   clearCache();
@@ -1065,6 +1085,55 @@ function resetToStart(){
 const urlCache = new Map();
 let showToken = 0;
 
+/* ---------- sharpness hint (plain math, not AI) ----------
+   Shrinks the photo, takes the variance of its edges, and compares with the other photos in
+   the batch. It only suggests: a soft photo gets a "Looks soft" tag, and nothing is rejected for you. */
+const sharp = new Map();   // photo key -> score
+async function sharpnessOf(blob){
+  try {
+    let bmp;
+    try { bmp = await createImageBitmap(blob, { resizeWidth: 320, resizeQuality: 'low' }); }
+    catch (e){ bmp = await createImageBitmap(blob); }
+    const w = Math.min(bmp.width, 320), h = Math.max(1, Math.round(bmp.height * (w / bmp.width)));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const d = ctx.getImageData(0, 0, w, h).data;
+    const g = new Float32Array(w * h);
+    for (let i = 0, p = 0; i < g.length; i++, p += 4) g[i] = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+    let n = 0, sum = 0, sq = 0;
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++){
+      const i = y * w + x, v = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - w] - g[i + w];
+      n++; sum += v; sq += v * v;
+    }
+    return n ? sq / n - (sum / n) * (sum / n) : null;
+  } catch (e){ return null; }
+}
+function isSoft(key){
+  const v = sharp.get(key);
+  if (v == null || sharp.size < 6) return false;
+  const all = Array.from(sharp.values()).sort((a, b) => a - b);
+  return v < 0.5 * all[Math.floor(all.length / 2)];
+}
+function updateSoftBadge(){
+  const it = state.items[state.index];
+  $('softBadge').hidden = !(it && state.mode === 'sort' && isSoft(it.key));
+}
+async function orderBySharpness(items){
+  const scored = [];
+  for (let i = 0; i < items.length; i++){
+    setStartMsg(`Checking sharpness: ${i + 1} of ${items.length}…`);
+    let v = null;
+    try { v = await sharpnessOf((await photoBlob(items[i])).blob); } catch (e){}
+    if (v != null) sharp.set(items[i].key, v);
+    scored.push([items[i], v]);
+    if (i % 8 === 7) await new Promise(r => setTimeout(r, 0));
+  }
+  setStartMsg('');
+  return scored.map((x, i) => [x[0], x[1], i]).sort((a, b) => (a[1] == null) - (b[1] == null) || (a[1] ?? 0) - (b[1] ?? 0) || a[2] - b[2]).map(x => x[0]);
+}
+
 function ensureUrl(i){
   if (i < 0 || i >= state.items.length) return null;
   let e = urlCache.get(i);
@@ -1074,6 +1143,8 @@ function ensureUrl(i){
       if (e.dead) return null;
       e.url = URL.createObjectURL(p.blob);
       e.info = p.info;
+      const key = state.items[i] && state.items[i].key;
+      if (key && !sharp.has(key)) sharpnessOf(p.blob).then(v => { if (v != null){ sharp.set(key, v); updateSoftBadge(); } });
       try {
         const warm = new Image();
         warm.src = e.url;
@@ -1118,6 +1189,7 @@ async function showPhoto(i){
     img.removeAttribute('src');
     $('fname').textContent = state.items[i].name + ` (${e.error || 'this photo can\'t be shown'}, you can still keep or reject it)`;
   }
+  updateSoftBadge();
   for (let k = 1; k <= 3; k++) ensureUrl(i + k);
   pruneCache(i);
 }
@@ -1164,6 +1236,7 @@ function render(){
   $('undoAllBtn').disabled = !state.decisions.some(Boolean);
 
   $('endMsg').hidden = !atEnd;
+  if (atEnd) $('softBadge').hidden = true;
   $('photo').hidden = atEnd;
   $('fname').hidden = atEnd;
 
@@ -1222,25 +1295,31 @@ function openGoTo(){
   input.select();
 }
 
-function openRound2(){
+function openRound2(auto){
+  auto = auto === true;
+  const left = state.decisions.filter(d => { const b = baseCode(d); return b && b !== 'reject'; }).length;
   const input = el('input', { type: 'text', id: 'round2Tags', autocomplete: 'off', placeholder: 'For example: Volleyball, Soccer, Cross country' });
   const start = () => {
     const tags = parseTags(input.value);
-    if (!tags.length){ input.focus(); return; }
+    if (!tags.length && !auto){ input.focus(); return; }
     startRound2(tags);
   };
   input.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); start(); } });
   openPanel('round2', [
-    el('h2', { text: 'Sort into categories' }),
-    el('p', { text: 'Next you will go through only the photos you kept, and press a number for each one. Nothing is saved yet. Everything is saved at the end, once.' }),
-    el('label', { for: 'round2Tags', text: 'Categories, separated by commas (up to 8)' }),
+    el('h2', { text: auto ? 'Pass 1 done' : 'Sort into categories' }),
+    el('p', { text: auto
+      ? `${left} of ${state.items.length} photos are left. Pass 2: go through them again and pick your best. Nothing is saved yet. Everything is saved at the end, once.`
+      : 'Next you will go through only the photos you kept, and press a number for each one. Nothing is saved yet. Everything is saved at the end, once.' }),
+    el('label', { for: 'round2Tags', text: auto ? 'Categories for pass 2, separated by commas (optional, up to 8)' : 'Categories, separated by commas (up to 8)' }),
     input,
     el('div', { class: 'presets' }, 'Quick fill: ',
       el('button', { class: 'btn ghost', type: 'button', text: 'Sports', onclick: () => { input.value = PRESETS.sports; input.focus(); } }),
       el('button', { class: 'btn ghost', type: 'button', text: 'Grades', onclick: () => { input.value = PRESETS.grades; input.focus(); } })),
     el('div', { class: 'row' },
-      el('button', { class: 'btn primary', type: 'button', text: 'Start', onclick: start }),
-      el('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: openFinish })
+      el('button', { class: 'btn primary', type: 'button', text: auto ? 'Start pass 2' : 'Start', onclick: start }),
+      auto ? el('button', { class: 'btn ghost', type: 'button', text: 'Skip pass 2 and save', onclick: () => { state.skipPass2 = true; openFinish(); } }) : null,
+      auto ? el('button', { class: 'btn ghost', type: 'button', text: 'Go back one photo', onclick: undo })
+           : el('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: openFinish })
     )
   ]);
   input.focus();
@@ -1256,6 +1335,7 @@ function startRound2(tags){
     if (isEdit(state.decisions[i])) flagged.add(it.key);
   });
   if (!keepers.length) return;
+  state.originalCount = state.items.length;
   roundOneStore = store;
   store = {};
   state.round = 2;
@@ -1381,6 +1461,7 @@ function openFinish(){
   if (unsorted > 0) rows.push(['Not sorted yet', unsorted]);
 
   const toCopy = sorted - t.reject;
+  if (state.round === 1 && state.twoPass && !state.skipPass2 && unsorted === 0 && toCopy > 0) return openRound2(true);
 
   const where = el('p');
   const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', list: 'eventOptions', value: state.eventName });
@@ -1526,9 +1607,10 @@ async function saveAll(){
   state.saving = false;
   flushStore();
   const tl = tally();
-  const total = state.items.length;
+  const total = state.originalCount || state.items.length;
+  const culled = state.originalCount ? state.originalCount - state.items.length : 0;
   const mins = state.startedAt ? Math.max(1, Math.round((Date.now() - state.startedAt) / 60000)) : 0;
-  const summary = `${total} photo${total === 1 ? '' : 's'} in, ${jobs.length} kept, ${tl.reject} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
+  const summary = `${total} photo${total === 1 ? '' : 's'} in, ${jobs.length} kept, ${tl.reject + culled} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
   openPanel('done', [
     el('h2', { text: 'Saved' }),
     el('p', { class: 'summary', text: summary }),

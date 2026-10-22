@@ -5,7 +5,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
 
 (async () => {
   const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
-    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
+    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/?passes=1',
     beforeParse(win){
       win.URL.createObjectURL = f => 'blob:mock/' + (f.name || 'x');
       win.URL.revokeObjectURL = () => {};

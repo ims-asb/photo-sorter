@@ -4,7 +4,7 @@ let failures = 0;
 const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; console.log('FAIL', l, x === undefined ? '' : x); } };
 (async () => {
   const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
-    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
+    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/?passes=1',
     beforeParse(win){
       win.__picker = async () => { throw new Error('unset'); };
       win.showDirectoryPicker = (...a) => win.__picker(...a);

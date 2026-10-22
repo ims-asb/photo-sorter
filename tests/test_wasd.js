@@ -5,7 +5,7 @@ let failures = 0;
 const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; console.log('FAIL', l, x === undefined ? '' : x); } };
 (async () => {
   const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
-    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
+    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/?passes=1',
     beforeParse(win){ win.URL.createObjectURL = () => 'blob:x'; win.URL.revokeObjectURL = () => {}; win.matchMedia = () => ({ matches: true }); }
   });
   const win = dom.window, doc = win.document, $ = id => doc.getElementById(id);
