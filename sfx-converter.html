@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ASB Sound Converter</title>
+<meta name="description" content="Turns video files into plain audio files for the sound library. Runs only on this computer.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%231c1c1a%22/%3E%3Crect x=%2210%22 y=%2226%22 width=%226%22 height=%2212%22 rx=%223%22 fill=%22%232ecc87%22/%3E%3Crect x=%2220%22 y=%2216%22 width=%226%22 height=%2232%22 rx=%223%22 fill=%22%232ecc87%22/%3E%3Crect x=%2230%22 y=%2210%22 width=%226%22 height=%2244%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2240%22 y=%2220%22 width=%226%22 height=%2224%22 rx=%223%22 fill=%22%232ecc87%22/%3E%3Crect x=%2250%22 y=%2226%22 width=%226%22 height=%2212%22 rx=%223%22 fill=%22%232ecc87%22/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f7f6f2; --surface:#fff; --line:#e4e2da; --line2:#c8c5bb; --text:#1a1917; --muted:#706e67;
+  --accent:#2a5caa; --keep:#1a6b4a; --bad:#b83030; --ink:#fff;
+  font-family:"DM Sans","Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#111110; --surface:#1c1c1a; --line:#2e2d2a; --line2:#3d3c38; --text:#f0ede8; --muted:#8a8880;
+    --accent:#6b9ff0; --keep:#2ecc87; --bad:#e05555; --ink:#111110; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{min-height:100vh;font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:46rem;margin:0 auto;padding:1.4rem 16px 3rem}
+h1{font-size:1.7rem;margin:.2rem 0 .3rem}
+p.lead{color:var(--muted);margin:0 0 1.2rem}
+.drop{border:2px dashed var(--line2);border-radius:16px;padding:1.4rem;margin-bottom:1rem;background:var(--surface);transition:border-color .12s}
+.drop.over{border-color:var(--keep)}
+.drop h2{margin:0 0 .3rem;font-size:1.05rem}
+.drop p{margin:0 0 .9rem;color:var(--muted)}
+.btn{border:1px solid var(--line2);background:var(--surface);border-radius:10px;padding:.6rem 1rem;font-weight:650}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.8rem 0}
+.out{color:var(--muted);font-size:.9rem}
+ul.files{list-style:none;margin:1rem 0;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+ul.files li{display:grid;grid-template-columns:1fr auto;gap:.6rem;padding:.55rem .8rem;border-top:1px solid var(--line);font-size:.92rem}
+ul.files li:first-child{border-top:0}
+.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{color:var(--muted);white-space:nowrap}
+.st.done{color:var(--keep)} .st.fail{color:var(--bad)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:.6rem 0}
+.bar i{display:block;height:100%;width:0;background:var(--keep)}
+.note{color:var(--muted);font-size:.85rem;margin-top:1.2rem}
+.sum{font-weight:650;margin:.4rem 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ASB Sound Converter</h1>
+  <p class="lead">Turns video files (mp4, mov, webm) into plain audio files, so nothing lands on your video track. It runs only on this computer, and nothing is uploaded.</p>
+
+  <div id="drop" class="drop">
+    <h2>Drop files or folders here</h2>
+    <p>Video files are turned into FLAC audio. Audio files (mp3, wav, flac, m4a, ogg) are copied as they are.</p>
+    <button class="btn primary" id="filesBtn" type="button">Choose files</button>
+    <button class="btn" id="folderBtn" type="button">Choose a folder</button>
+    <input id="fileInput" type="file" multiple accept="video/*,audio/*,.mp4,.mov,.m4v,.webm,.mkv,.mp3,.wav,.flac,.m4a,.ogg" hidden>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="outBtn" type="button">Choose where to save</button>
+    <span class="out" id="outName">Nothing chosen yet</span>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="goBtn" type="button" disabled>Convert</button>
+    <button class="btn" id="clearBtn" type="button" disabled>Clear list</button>
+  </div>
+  <div class="bar" id="bar" hidden><i id="barFill"></i></div>
+  <div class="sum" id="sum" aria-live="polite"></div>
+  <ul class="files" id="list" hidden></ul>
+
+  <p class="note">Use Chrome or Edge. Converted files keep their folder names and get the same name with .flac. Your originals are never changed. Files over 600 MB are skipped, because the whole file has to be read into memory.</p>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- FLAC encoder (16-bit, lossless). Fixed predictors and Rice coding, written from the FLAC format spec. ---------- */
+const BLOCK = 4096;
+
+function crc8(bytes){ let c = 0; for (let i = 0; i < bytes.length; i++){ c ^= bytes[i]; for (let k = 0; k < 8; k++) c = (c & 0x80) ? ((c << 1) ^ 0x07) & 0xFF : (c << 1) & 0xFF; } return c; }
+const CRC16 = (() => { const t = new Uint16Array(256); for (let n = 0; n < 256; n++){ let c = n << 8; for (let k = 0; k < 8; k++) c = (c & 0x8000) ? ((c << 1) ^ 0x8005) & 0xFFFF : (c << 1) & 0xFFFF; t[n] = c; } return t; })();
+function crc16(bytes){ let c = 0; for (let i = 0; i < bytes.length; i++) c = ((c << 8) & 0xFFFF) ^ CRC16[((c >> 8) ^ bytes[i]) & 0xFF]; return c; }
+
+class Bits {
+  constructor(){ this.buf = new Uint8Array(1 << 16); this.len = 0; this.acc = 0; this.n = 0; }
+  _push(b){ if (this.len === this.buf.length){ const nb = new Uint8Array(this.buf.length * 2); nb.set(this.buf); this.buf = nb; } this.buf[this.len++] = b; }
+  write(value, bits){            // value is an unsigned integer below 2^bits, bits up to 32
+    while (bits > 0){
+      const take = Math.min(bits, 16);
+      const part = Math.floor(value / Math.pow(2, bits - take)) % Math.pow(2, take);
+      this.acc = this.acc * Math.pow(2, take) + part; this.n += take; bits -= take;
+      while (this.n >= 8){
+        const sh = Math.pow(2, this.n - 8);
+        this._push(Math.floor(this.acc / sh) & 0xFF);
+        this.acc = this.acc % sh; this.n -= 8;
+      }
+    }
+  }
+  signed(v, bits){ this.write(v < 0 ? v + Math.pow(2, bits) : v, bits); }
+  unary(q){ while (q >= 16){ this.write(0, 16); q -= 16; } this.write(1, q + 1); }   // q zeros then a one
+  align(){ if (this.n) this.write(0, 8 - this.n); }
+  bytes(){ return this.buf.subarray(0, this.len); }
+}
+
+function utf8Number(n){          // FLAC writes the frame number like a UTF-8 character
+  if (n < 0x80) return [n];
+  let bytes = 2; while (n >= Math.pow(2, 5 * bytes + 1)) bytes++;
+  const out = new Array(bytes); let v = n;
+  for (let i = bytes - 1; i > 0; i--){ out[i] = 0x80 | (v % 64); v = Math.floor(v / 64); }
+  out[0] = ((0xFF << (8 - bytes)) & 0xFF) | v;
+  return out;
+}
+
+function encodeSubframe(w, x, start, count, bps){
+  // constant?
+  let same = true; for (let i = 1; i < count; i++) if (x[start + i] !== x[start]){ same = false; break; }
+  if (same){ w.write(0, 1); w.write(0, 6); w.write(0, 1); w.signed(x[start], bps); return; }
+  // try fixed predictors 0..4
+  let bestOrder = 0, bestSum = Infinity;
+  const maxOrder = Math.min(4, count - 1);
+  for (let o = 0; o <= maxOrder; o++){
+    let sum = 0;
+    for (let i = maxOrder; i < count; i++) sum += Math.abs(resid(x, start + i, o));
+    if (sum < bestSum){ bestSum = sum; bestOrder = o; }
+  }
+  const o = bestOrder, n = count - o;
+  const u = new Array(n); let tot = 0;
+  for (let i = 0; i < n; i++){ const r = resid(x, start + o + i, o); const z = r >= 0 ? r * 2 : -r * 2 - 1; u[i] = z; tot += z; }
+  // pick the Rice parameter with the fewest bits
+  let bestK = 0, bestBits = Infinity;
+  const guess = Math.max(0, Math.min(14, Math.floor(Math.log2(Math.max(1, tot / n)))));
+  for (let k = Math.max(0, guess - 2); k <= Math.min(14, guess + 2); k++){
+    let bits = n * (k + 1); for (let i = 0; i < n; i++) bits += Math.floor(u[i] / Math.pow(2, k));
+    if (bits < bestBits){ bestBits = bits; bestK = k; }
+  }
+  const verbatimBits = count * bps;
+  if (bestBits + o * bps + 12 >= verbatimBits){        // not smaller: store the samples as they are
+    w.write(0, 1); w.write(1, 6); w.write(0, 1); for (let i = 0; i < count; i++) w.signed(x[start + i], bps); return;
+  }
+  w.write(0, 1); w.write(8 + o, 6); w.write(0, 1);
+  for (let i = 0; i < o; i++) w.signed(x[start + i], bps);
+  w.write(0, 2); w.write(0, 4); w.write(bestK, 4);
+  const kp = Math.pow(2, bestK);
+  for (let i = 0; i < n; i++){ const q = Math.floor(u[i] / kp); w.unary(q); if (bestK) w.write(u[i] % kp, bestK); }
+}
+function resid(x, i, o){
+  switch (o){
+    case 0: return x[i];
+    case 1: return x[i] - x[i - 1];
+    case 2: return x[i] - 2 * x[i - 1] + x[i - 2];
+    case 3: return x[i] - 3 * x[i - 1] + 3 * x[i - 2] - x[i - 3];
+    default: return x[i] - 4 * x[i - 1] + 6 * x[i - 2] - 4 * x[i - 3] + x[i - 4];
+  }
+}
+
+/* channels: array of Int32Array holding 16-bit samples. Returns a Uint8Array with the whole .flac file. */
+function encodeFlac(channels, sampleRate){
+  const ch = channels.length, total = channels[0].length, bps = 16;
+  const out = [];
+  const head = new Bits();
+  head.write(0x664C6143, 32);                // "fLaC"
+  head.write(1, 1); head.write(0, 7);        // last metadata block, STREAMINFO
+  head.write(34, 24);
+  head.write(BLOCK, 16); head.write(BLOCK, 16);
+  head.write(0, 24); head.write(0, 24);      // frame sizes unknown
+  head.write(sampleRate, 20); head.write(ch - 1, 3); head.write(bps - 1, 5);
+  head.write(Math.floor(total / 4294967296), 4); head.write(total % 4294967296, 32);
+  for (let i = 0; i < 4; i++) head.write(0, 32);   // MD5 not set
+  out.push(head.bytes().slice());
+  let frame = 0;
+  for (let pos = 0; pos < total || (total === 0 && frame === 0); pos += BLOCK, frame++){
+    const count = Math.min(BLOCK, total - pos);
+    if (count <= 0) break;
+    const hdr = [0xFF, 0xF8];                // sync, fixed block size
+    const lastOdd = count !== BLOCK;
+    hdr.push(((lastOdd ? 7 : 12) << 4) | 0); // block size code, sample rate from STREAMINFO
+    hdr.push(((ch - 1) << 4) | 0);           // independent channels, sample size from STREAMINFO
+    hdr.push(...utf8Number(frame));
+    if (lastOdd){ hdr.push(((count - 1) >> 8) & 0xFF, (count - 1) & 0xFF); }
+    hdr.push(crc8(hdr));
+    const w = new Bits();
+    for (let c = 0; c < ch; c++) encodeSubframe(w, channels[c], pos, count, bps);
+    w.align();
+    const body = w.bytes();
+    const all = new Uint8Array(hdr.length + body.length + 2);
+    all.set(hdr, 0); all.set(body, hdr.length);
+    const c16 = crc16(all.subarray(0, all.length - 2));
+    all[all.length - 2] = c16 >> 8; all[all.length - 1] = c16 & 0xFF;
+    out.push(all);
+  }
+  return new Blob(out, { type: 'audio/flac' });
+}
+
+/* ---------- reading audio out of a video file ---------- */
+let actx = null;
+async function decodeToChannels(file){
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+  let buf;
+  try { buf = await actx.decodeAudioData(await file.arrayBuffer()); }
+  catch (e){ throw new Error('this browser could not read the sound in this file. Try Chrome or Edge, or check that the file has sound'); }
+  const chans = [];
+  for (let c = 0; c < Math.min(buf.numberOfChannels, 8); c++){
+    const f = buf.getChannelData(c), s = new Int32Array(f.length);
+    for (let i = 0; i < f.length; i++){ const v = Math.round(f[i] * 32768); s[i] = v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
+    chans.push(s);
+  }
+  return { channels: chans, sampleRate: buf.sampleRate };
+}
+window.sfxConverter = { encodeFlac, decodeToChannels };
+
+/* ---------- the page ---------- */
+const $ = id => document.getElementById(id);
+const VIDEO = /\.(mp4|mov|m4v|webm|mkv)$/i, AUDIO = /\.(mp3|wav|flac|m4a|ogg|aac)$/i;
+const MAX_BYTES = 600 * 1024 * 1024;
+let items = [], outDir = null, busy = false;
+
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)){ if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v); }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+const mb = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+
+function draw(){
+  const list = $('list');
+  list.hidden = !items.length;
+  list.replaceChildren(...items.map(it => el('li', null,
+    el('span', { class: 'nm', text: (it.path.length ? it.path.join('/') + '/' : '') + it.name, title: it.name }),
+    el('span', { class: 'st ' + (it.cls || ''), text: it.status }))));
+  $('goBtn').disabled = busy || !items.length || !items.some(i => i.status === 'Waiting');
+  $('clearBtn').disabled = busy || !items.length;
+}
+function add(file, path){
+  if (!(VIDEO.test(file.name) || AUDIO.test(file.name))) return;
+  items.push({ file, name: file.name, path: path || [], status: 'Waiting', cls: '' });
+}
+async function addHandles(handles){
+  for (const h of handles){
+    if (h.kind === 'directory') await walkDir(h, [h.name]); else add(await h.getFile(), []);
+  }
+  $('sum').textContent = ''; draw();
+}
+async function walkDir(dir, path){
+  for await (const [, h] of dir.entries()){
+    if (h.name.startsWith('.')) continue;
+    if (h.kind === 'directory') await walkDir(h, path.concat(h.name)); else add(await h.getFile(), path);
+  }
+}
+
+$('filesBtn').addEventListener('click', async () => {
+  if (window.showOpenFilePicker){
+    try { addHandles(await window.showOpenFilePicker({ multiple: true })); } catch (e){}
+  } else $('fileInput').click();
+});
+$('folderBtn').addEventListener('click', async () => {
+  if (!window.showDirectoryPicker){ $('sum').textContent = 'Choosing a folder needs Chrome or Edge.'; return; }
+  try { addHandles([await window.showDirectoryPicker({ id: 'sfx-in' })]); } catch (e){}
+});
+$('fileInput').addEventListener('change', e => { Array.from(e.target.files).forEach(f => add(f, [])); e.target.value = ''; $('sum').textContent = ''; draw(); });
+$('clearBtn').addEventListener('click', () => { items = []; $('sum').textContent = ''; $('bar').hidden = true; draw(); });
+
+async function chooseOut(){
+  if (!window.showDirectoryPicker) return false;
+  try {
+    outDir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'sfx-out' });
+    $('outName').textContent = 'Saving into: ' + outDir.name;
+    return true;
+  } catch (e){ return false; }
+}
+$('outBtn').addEventListener('click', chooseOut);
+
+/* drag and drop */
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', async e => {
+  const jobs = [];
+  for (const it of e.dataTransfer.items || []) if (it.kind === 'file' && it.getAsFileSystemHandle) jobs.push(it.getAsFileSystemHandle().catch(() => null));
+  const handles = (await Promise.all(jobs)).filter(Boolean);
+  if (handles.length) addHandles(handles);
+  else { Array.from(e.dataTransfer.files).forEach(f => add(f, [])); draw(); }
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+async function uniqueFile(dir, name){
+  let n = name, i = 1;
+  for (;;){
+    try { await dir.getFileHandle(n); const dot = name.lastIndexOf('.'); i++; n = name.slice(0, dot) + ' (' + i + ')' + name.slice(dot); }
+    catch (e){ return dir.getFileHandle(n, { create: true }); }
+  }
+}
+async function saveBlob(blob, name, path){
+  if (outDir){
+    let d = outDir; for (const p of path) d = await d.getDirectoryHandle(p, { create: true });
+    const fh = await uniqueFile(d, name); const w = await fh.createWritable(); await w.write(blob); await w.close();
+  } else {
+    const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  }
+}
+
+$('goBtn').addEventListener('click', async () => {
+  if (!outDir && window.showDirectoryPicker && !(await chooseOut())) return;
+  busy = true; draw();
+  const todo = items.filter(i => i.status === 'Waiting');
+  $('bar').hidden = false; let done = 0, converted = 0, copied = 0, failed = 0;
+  for (const it of todo){
+    $('barFill').style.width = (done / todo.length * 100) + '%';
+    try {
+      if (it.file.size > MAX_BYTES) throw new Error('Too big (over 600 MB)');
+      const base = it.name.replace(/\.[^.]+$/, '');
+      if (VIDEO.test(it.name)){
+        it.status = 'Converting…'; draw();
+        const { channels, sampleRate } = await decodeToChannels(it.file);
+        if (!channels.length || !channels[0].length) throw new Error('No sound found');
+        const blob = encodeFlac(channels, sampleRate);
+        await saveBlob(blob, base + '.flac', it.path);
+        it.status = 'Done: ' + mb(it.file.size) + ' to ' + mb(blob.size); converted++;
+      } else {
+        await saveBlob(it.file, it.name, it.path);
+        it.status = 'Copied as is'; copied++;
+      }
+      it.cls = 'done';
+    } catch (e){
+      it.status = 'Could not convert' + (e && e.message ? ': ' + e.message : ''); it.cls = 'fail'; failed++;
+    }
+    done++; draw();
+    await new Promise(r => setTimeout(r, 0));
+  }
+  $('barFill').style.width = '100%'; busy = false; draw();
+  $('sum').textContent = `${converted} converted, ${copied} copied as is${failed ? ', ' + failed + ' failed' : ''}.`
+    + (outDir ? ` They are in “${outDir.name}”.` : ' They went to your Downloads folder.');
+});
+
+draw();
+})();
+</script>
+</body>
+</html>
