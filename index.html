@@ -1364,6 +1364,7 @@ function startRound2(tags){
   if (!keepers.length) return;
   keepers.sort((a, b) => (a.orderIdx ?? 0) - (b.orderIdx ?? 0));   // pass 2 goes back to the normal order
   scoreToken++;
+  flushStore();   // save pass 1 before the round swap, or its last choices could be lost
   state.originalCount = state.items.length;
   roundOneStore = store;
   store = {};
