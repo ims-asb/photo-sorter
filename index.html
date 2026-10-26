@@ -63,6 +63,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #stage{position:relative;min-height:0;padding:1rem;overflow:hidden}
 #photo{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in}
 #photo.zoomed{cursor:zoom-out}
+#clip{width:100%;height:100%;object-fit:contain;display:block;background:#000}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
 #zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
@@ -158,7 +159,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
   <div class="col">
     <svg class="logo" role="img" aria-label="Photo sorter logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1c1c1a"/><rect x="9" y="13" width="34" height="38" rx="5" fill="#e05555" transform="rotate(-10 26 32)"/><rect x="21" y="13" width="34" height="38" rx="5" fill="#2ecc87" transform="rotate(8 38 32)"/><path d="M26 44l8-11 6 7 4-5 7 9z" fill="#fff" transform="rotate(8 38 32)"/><circle cx="42" cy="24" r="3.5" fill="#fff" transform="rotate(8 38 32)"/></svg>
     <h1>Sort photos fast</h1>
-    <p>Add your photos, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
+    <p>Add your photos or video clips, then press the right arrow to keep one and the left arrow to reject it. Your photos stay on this computer, and your originals are never changed.</p>
 
     <ol class="steps">
       <li>Add your photos</li>
@@ -175,13 +176,13 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 
     <div id="drop" class="dropzone">
       <div class="dz-title">Drop photos, folders, or zip files here</div>
-      <p class="dz-sub">JPG, PNG, WebP, and Canon CR2 photos all work, and zip files are opened for you. Everything is saved as JPG or PNG. You can drop more at any time while you sort.</p>
+      <p class="dz-sub">JPG, PNG, WebP, and Canon CR2 photos all work, and zip files are opened for you. Everything is saved as JPG or PNG. Video clips (mp4, mov, webm) work too and are copied as they are. You can drop more at any time while you sort.</p>
       <div class="dz-actions">
         <button id="choosePhotosBtn" class="btn" type="button">Choose photos</button>
         <button id="chooseFolderBtn" class="btn ghost" type="button">Choose a folder</button>
       </div>
       <small class="hint">Tip: <b>Choose a folder</b> saves the finished folder inside that same folder, so there is nothing to set up.</small>
-      <input id="fileInput" type="file" multiple accept="image/*,.cr2,.zip" hidden>
+      <input id="fileInput" type="file" multiple accept="image/*,video/*,.cr2,.zip,.mp4,.mov,.m4v,.webm,.mkv" hidden>
     </div>
 
     <div class="field">
@@ -244,6 +245,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
   <div id="progress"><div id="progressFill"></div></div>
   <section id="stage">
     <img id="photo" alt="">
+    <video id="clip" playsinline loop muted controls hidden></video>
     <div id="fname"></div>
     <div id="zoomBadge" hidden></div>
     <div id="softBadge" hidden>Looks soft</div>
@@ -278,6 +280,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 'use strict';
 
 const SHOWABLE = /\.(jpe?g|png|webp|gif|bmp|avif)$/i;
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv)$/i;   // video clips are shown, kept or rejected, and copied as they are
 const RAW_EXT = /\.cr2$/i;                 // Canon RAW: we use the full-size JPEG preview stored inside it
 const ZIP_EXT = /\.zip$/i;
 const KEEP_AS_IS = /\.(jpe?g|png)$/i;      // already JPG or PNG, saved untouched
@@ -378,13 +381,23 @@ function folderFor(code){
   return safeName(code.replace(/^t:/, ''));
 }
 
+/* "photo", "clip", or "file" for a batch that has both */
+function unitWord(n){
+  const v = state.items.filter(i => i.video).length;
+  const base = v === 0 ? 'photo' : v === state.items.length ? 'clip' : 'file';
+  return n === 1 ? base : base + 's';
+}
+
 function hintItems(){
   const n = state.tags.length;
   const items = [['← or A', 'Reject'], ['→ or D', 'Keep']];
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑ or W', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
-  items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less'], ['G', 'Go to photo'], ['Ctrl+Z or S', 'Undo']);
+  const vids = state.items.filter(i => i.video).length;
+  if (vids) items.push(['Space', 'Play or pause'], ['M', 'Sound on or off']);
+  if (vids < state.items.length) items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less']);
+  items.push(['G', 'Go to ' + unitWord(1)], ['Ctrl+Z or S', 'Undo']);
   return items;
 }
 function buildHints(){
@@ -405,6 +418,8 @@ let zoomed = false;
 let zoomLevel = 2;   // starts gentle, and is remembered while the page is open
 function setZoom(on, evt){
   const img = $('photo');
+  const cur = state.items[state.index];
+  if (on && cur && cur.video) return;
   if (on && (!img.getAttribute('src') || !img.naturalWidth)) return;
   zoomed = on;
   img.classList.toggle('zoomed', on);
@@ -709,7 +724,7 @@ async function convertToJpg(blob){
 // preview, and WebP, GIF, BMP, and AVIF are converted to JPG.
 async function exportBlob(item){
   const p = await photoBlob(item);
-  if (item.raw || KEEP_AS_IS.test(item.name)) return p;
+  if (item.raw || item.video || KEEP_AS_IS.test(item.name)) return p;
   return { blob: await convertToJpg(p.blob), name: baseOf(item.name) + '.jpg', info: '' };
 }
 
@@ -863,8 +878,9 @@ async function choosePhotos(){
     handles = await window.showOpenFilePicker({
       multiple: true,
       id: 'photo-sorter-files',
-      types: [{ description: 'Photos, Canon CR2, and zip files', accept: {
+      types: [{ description: 'Photos, video clips, Canon CR2, and zip files', accept: {
         'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'],
+        'video/*': ['.mp4', '.m4v', '.mov', '.webm', '.mkv'],
         'image/x-canon-cr2': ['.cr2'],
         'application/zip': ['.zip']
       } }]
@@ -893,7 +909,7 @@ async function walk(h, out, depth){
       }
       return;
     }
-    if (SHOWABLE.test(h.name) || RAW_EXT.test(h.name)) out.files.push(h);
+    if (SHOWABLE.test(h.name) || RAW_EXT.test(h.name) || VIDEO_EXT.test(h.name)) out.files.push(h);
     else if (CAMERA_ONLY.test(h.name)) out.skippedCamera++;
     return;
   }
@@ -918,7 +934,7 @@ async function buildItems(handles, existingKeys, sortBy){
     }
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ key, name: h.name, size, mtime, raw: RAW_EXT.test(h.name), handle: h });
+    items.push({ key, name: h.name, size, mtime, raw: RAW_EXT.test(h.name), video: VIDEO_EXT.test(h.name), handle: h });
   }
 
   // Cameras set to RAW+JPEG make two files per shot. Show the JPG and skip its RAW twin.
@@ -975,7 +991,7 @@ async function ingest(handles, opts){
 
   if (!built.items.length){
     const why = built.badZips.length ? ` Problem with zip: ${built.badZips.join('; ')}.` : '';
-    setStartMsg('No photos found. This tool opens JPG, PNG, WebP, GIF, BMP, AVIF, and Canon CR2 files, and zip files with those inside.' + why, true);
+    setStartMsg('No photos found. This tool opens JPG, PNG, WebP, GIF, BMP, AVIF, and Canon CR2 photos, mp4, mov, and webm video clips, and zip files with those inside.' + why, true);
     return;
   }
 
@@ -1047,7 +1063,7 @@ function openResumePanel(restored, resumeAt){
   const total = state.items.length;
   openPanel('resume', [
     el('h2', { text: 'Pick up where you left off?' }),
-    el('p', { text: `You already sorted ${restored} of these ${total} photos.` }),
+    el('p', { text: `You already sorted ${restored} of these ${total} ${unitWord(total)}.` }),
     el('div', { class: 'row' },
       el('button', { class: 'btn primary', type: 'button', text: resumeAt >= total ? 'Review and save' : `Resume at photo ${resumeAt + 1}`,
         onclick: () => { closePanel(); beginSorting(resumeAt); } }),
@@ -1137,7 +1153,7 @@ async function scoreInBackground(){
   const worker = async () => {
     while (token === scoreToken && next < items.length){
       const it = items[next++];
-      if (sharp.has(it.key)) continue;
+      if (it.video || sharp.has(it.key)) continue;
       let v = null;
       try { v = await sharpnessOf((await photoBlob(it)).blob); } catch (e){}
       if (v != null) sharp.set(it.key, v);
@@ -1169,12 +1185,14 @@ function ensureUrl(i){
       e.url = URL.createObjectURL(p.blob);
       e.info = p.info;
       const key = state.items[i] && state.items[i].key;
-      if (key && !sharp.has(key)) sharpnessOf(p.blob).then(v => { if (v != null){ sharp.set(key, v); updateSoftBadge(); } });
-      try {
-        const warm = new Image();
-        warm.src = e.url;
-        if (warm.decode) warm.decode().catch(() => {});
-      } catch (err) {}
+      if (key && !state.items[i].video && !sharp.has(key)) sharpnessOf(p.blob).then(v => { if (v != null){ sharp.set(key, v); updateSoftBadge(); } });
+      if (!(state.items[i] && state.items[i].video)){
+        try {
+          const warm = new Image();
+          warm.src = e.url;
+          if (warm.decode) warm.decode().catch(() => {});
+        } catch (err) {}
+      }
       return e.url;
     }).catch(err => { e.failed = true; e.error = err && err.message ? err.message : ''; return null; });
     urlCache.set(i, e);
@@ -1200,6 +1218,23 @@ function clearCache(){
   urlCache.clear();
 }
 
+const CAN_PLAY = !/jsdom/i.test(navigator.userAgent);
+let clipMuted = true;
+function stopClip(){
+  const c = $('clip');
+  if (c.getAttribute('src') === null) return;
+  if (CAN_PLAY){ try { c.pause(); } catch (e){} }
+  c.removeAttribute('src');
+  if (CAN_PLAY){ try { c.load(); } catch (e){} }
+}
+const mbText = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : (n / 1048576 < 10 ? (n / 1048576).toFixed(1) : Math.round(n / 1048576)) + ' MB';
+const clipTime = s => { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function toggleClip(){
+  const c = $('clip');
+  if (c.hidden || !CAN_PLAY) return;
+  if (c.paused) c.play().catch(() => {}); else c.pause();
+}
+
 async function showPhoto(i){
   setZoom(false);
   const token = ++showToken;
@@ -1207,6 +1242,25 @@ async function showPhoto(i){
   const url = await e.ready;
   if (token !== showToken) return;
   const img = $('photo');
+  if (state.items[i].video){
+    const c = $('clip'), it = state.items[i];
+    img.removeAttribute('src');
+    $('softBadge').hidden = true;
+    const base = it.name + ' · ' + mbText(it.size);
+    $('fname').textContent = base;
+    if (url){
+      c.muted = clipMuted;
+      c.onloadedmetadata = () => { if (token === showToken && isFinite(c.duration)) $('fname').textContent = base + ' · ' + clipTime(c.duration); };
+      c.onerror = () => { if (token === showToken) $('fname').textContent = it.name + " (this video can't be previewed here, you can still keep or reject it)"; };
+      c.src = url;
+      if (CAN_PLAY) c.play().catch(() => {});
+    } else {
+      $('fname').textContent = it.name + ` (${e.error || "this video can't be opened"}, you can still keep or reject it)`;
+    }
+    for (let k = 1; k <= 2; k++) ensureUrl(i + k);
+    pruneCache(i);
+    return;
+  }
   if (url){
     img.src = url;
     $('fname').textContent = state.items[i].name + (e.info ? ' · ' + e.info : '');
@@ -1261,9 +1315,12 @@ function render(){
   $('undoBtn').disabled = state.index === 0;
   $('undoAllBtn').disabled = !state.decisions.some(Boolean);
 
+  const vid = !atEnd && state.items[state.index] && state.items[state.index].video;
   $('endMsg').hidden = !atEnd;
-  if (atEnd) $('softBadge').hidden = true;
-  $('photo').hidden = atEnd;
+  if (atEnd || vid) $('softBadge').hidden = true;
+  $('photo').hidden = atEnd || !!vid;
+  $('clip').hidden = !vid;
+  if (!vid) stopClip();
   $('fname').hidden = atEnd;
 
   if (!atEnd) showPhoto(state.index);
@@ -1335,7 +1392,7 @@ function openRound2(auto){
   openPanel('round2', [
     el('h2', { text: auto ? 'Pass 1 done' : 'Sort into categories' }),
     el('p', { text: auto
-      ? `${left} of ${state.items.length} photos are left. Pass 2: label them. Press a number for each photo, or the right arrow for no category. Nothing is saved yet. Everything is saved at the end, once.`
+      ? `${left} of ${state.items.length} ${unitWord(2)} are left. Pass 2: label them. Press a number for each photo, or the right arrow for no category. Nothing is saved yet. Everything is saved at the end, once.`
       : 'Next you will go through only the photos you kept, and press a number for each one. Nothing is saved yet. Everything is saved at the end, once.' }),
     el('label', { for: 'round2Tags', text: auto ? 'Categories for pass 2, separated by commas (up to 8)' : 'Categories, separated by commas (up to 8)' }),
     input,
@@ -1496,7 +1553,7 @@ function openFinish(){
   const where = el('p');
   const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', list: 'eventOptions', value: state.eventName });
   const refreshWhere = () => {
-    where.textContent = `Saving copies ${toCopy} photo${toCopy === 1 ? '' : 's'} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
+    where.textContent = `Saving copies ${toCopy} ${unitWord(toCopy)} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
   };
   nameInput.addEventListener('input', () => {
     state.eventName = nameInput.value.trim() || defaultEventName();
@@ -1506,7 +1563,7 @@ function openFinish(){
   refreshWhere();
 
   openPanel('finish', [
-    el('h2', { text: unsorted === 0 ? 'All photos sorted' : 'Save what you\'ve sorted so far' }),
+    el('h2', { text: unsorted === 0 ? `All ${unitWord(2)} sorted` : 'Save what you\'ve sorted so far' }),
     el('dl', null, rows.map(([label, count]) => [el('dt', { text: label }), el('dd', { class: 'num', text: count })])),
     el('label', { for: 'finishName', text: 'Name for the sorted folder' }),
     nameInput,
@@ -1515,7 +1572,7 @@ function openFinish(){
     el('p', { class: 'small', text: 'Everything is saved as JPG or PNG. CR2 files are saved as JPGs from the preview built into them.' }),
     el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
     el('div', { class: 'row' },
-      el('button', { class: 'btn primary', type: 'button', text: 'Save sorted photos', disabled: toCopy === 0 ? 'disabled' : null, onclick: saveAll }),
+      el('button', { class: 'btn primary', type: 'button', text: `Save sorted ${unitWord(2)}`, disabled: toCopy === 0 ? 'disabled' : null, onclick: saveAll }),
       state.round === 1 && !state.tags.length && toCopy > 0
         ? el('button', { class: 'btn ghost', type: 'button', text: 'Next: sort the kept photos into categories', onclick: openRound2 }) : null,
       el('button', { class: 'btn ghost', type: 'button',
@@ -1585,7 +1642,7 @@ async function saveAll(){
   const status = el('p', { text: 'Starting…' });
   state.panelKind = 'saving';
   $('sheet').replaceChildren(
-    el('h2', { text: 'Saving your photos' }),
+    el('h2', { text: `Saving your ${unitWord(2)}` }),
     el('div', { class: 'bigbar' }, bar),
     status
   );
@@ -1640,11 +1697,11 @@ async function saveAll(){
   const total = state.originalCount || state.items.length;
   const culled = state.originalCount ? state.originalCount - state.items.length : 0;
   const mins = state.startedAt ? Math.max(1, Math.round((Date.now() - state.startedAt) / 60000)) : 0;
-  const summary = `${total} photo${total === 1 ? '' : 's'} in, ${jobs.length} kept, ${tl.reject + culled} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
+  const summary = `${total} ${unitWord(total)} in, ${jobs.length} kept, ${tl.reject + culled} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
   openPanel('done', [
     el('h2', { text: 'Saved' }),
     el('p', { class: 'summary', text: summary }),
-    el('p', { text: `${copied} photo${copied === 1 ? '' : 's'} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
+    el('p', { text: `${copied} ${unitWord(copied)} copied${already ? `, ${already} already there` : ''}. They are in “${outputFolderName()}” inside “${dest.name}”. Drag the folders into OneDrive from there.` }),
     failed.length ? el('p', { text: `${failed.length} could not be saved: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '; and more' : ''}.` }) : null,
     el('div', { class: 'row' },
       el('button', { class: 'btn primary', type: 'button', text: 'Sort more photos', onclick: () => { closePanel(); sessionClear(); resetToStart(); } }),
@@ -1762,6 +1819,8 @@ function bindSortControls(){
     if (e.key === 'ArrowRight' || k === 'd'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft' || k === 'a'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
+    else if (e.key === ' ' && !e.repeat){ e.preventDefault(); toggleClip(); }
+    else if (k === 'm' && !e.repeat){ e.preventDefault(); clipMuted = !clipMuted; $('clip').muted = clipMuted; setNote(clipMuted ? 'Sound off' : 'Sound on'); clearTimeout(undoTipTimer); undoTipTimer = setTimeout(() => setNote(noteText()), 1500); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
     else if (e.key === '+' || e.key === '='){ e.preventDefault(); stepZoom(1); }
     else if (e.key === '-' || e.key === '_'){ e.preventDefault(); stepZoom(-1); }
