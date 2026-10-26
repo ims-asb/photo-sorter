@@ -20,7 +20,7 @@ await p.keyboard.press(' '); await p.waitForTimeout(200); const paused=await p.e
 ok('Space pauses', paused===true);
 await p.keyboard.press(' '); await p.waitForTimeout(200); ok('Space plays again', (await p.evaluate(()=>document.getElementById('clip').paused))===false);
 const muted0=await p.evaluate(()=>document.getElementById('clip').muted); await p.keyboard.press('m'); const muted1=await p.evaluate(()=>document.getElementById('clip').muted);
-ok('M switches the sound', muted0===true&&muted1===false, {muted0,muted1});
+ok('sound is on by default and M switches it off', muted0===false&&muted1===true, {muted0,muted1});
 await p.keyboard.press('ArrowRight');   // keep clip1
 await p.waitForFunction(()=>/clip2/.test(document.getElementById('fname').textContent));
 ok('the next clip loads and plays', await p.evaluate(()=>!document.getElementById('clip').hidden));

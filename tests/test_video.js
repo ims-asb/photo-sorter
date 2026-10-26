@@ -30,7 +30,8 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('name and size are shown', /a\.mp4/.test($('fname').textContent) && /MB/.test($('fname').textContent), $('fname').textContent);
   check('hints mention play and sound', /Play or pause/.test($('hints').textContent) && /Sound on or off/.test($('hints').textContent) && !/Zoom/.test($('hints').textContent), $('hints').textContent);
   key('z'); check('zoom does nothing on a clip', !$('zoomBadge') || $('zoomBadge').hidden);
-  key('m'); check('M toggles sound with a note', /Sound on/.test($('note').textContent), $('note').textContent);
+  check('sound is on by default', $('clip').muted === false);
+  key('m'); check('M turns the sound off, with a note', /Sound off/.test($('note').textContent) && $('clip').muted === true, $('note').textContent);
   key('ArrowRight'); key('ArrowLeft'); key('ArrowUp'); key('ArrowRight'); await sleep(40);
   check('finish speaks of clips', /All clips sorted/.test($('sheet').textContent), $('sheet').textContent.slice(0, 80));
   check('the clip is hidden at the end', $('clip').hidden);
