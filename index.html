@@ -1480,7 +1480,7 @@ function showUndoTip(){
 function undo(){
   if (state.saving || state.index === 0) return;
   if (state.mode === 'panel'){
-    if (state.panelKind !== 'finish') return;
+    if (state.panelKind !== 'finish' && state.panelKind !== 'round2') return;   // the end-of-pass panels let you step back too
     closePanel();
   }
   if (state.mode !== 'sort') return;
@@ -1816,7 +1816,7 @@ function bindSortControls(){
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    const canUndo = state.mode === 'sort' || (state.mode === 'panel' && state.panelKind === 'finish');
+    const canUndo = state.mode === 'sort' || (state.mode === 'panel' && (state.panelKind === 'finish' || state.panelKind === 'round2'));
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key || '').toLowerCase() === 'z'){
       if (canUndo){ e.preventDefault(); if (!e.repeat){ usedUndoKey = true; undo(); } }
       return;

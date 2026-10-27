@@ -28,7 +28,7 @@ async function load(){
 }
 (async () => {
   // default flow
-  let { doc, $, key, btn, dest, add } = await load();
+  let { win, doc, $, key, btn, dest, add } = await load();
   check('two passes is on by default', $('twoPassInput').checked);
   $('eventInput').value = 'Games';
   await add(['a','b','c','d','e']);
@@ -75,6 +75,18 @@ async function load(){
   await add(['a','b']);
   key('ArrowRight'); key('ArrowRight'); await sleep(40);
   check('unchecked means one pass', /All photos sorted/.test($('sheet').textContent));
+
+  // going back from the pass 1 panel
+  ({ win, doc, $, key, btn, dest, add } = await load());
+  await add(['a','b','c']);
+  key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); await sleep(40);
+  check('pass 1 panel is up', /Pass 1 done/.test($('sheet').textContent));
+  btn(/Go back one photo/).click(); await sleep(30);
+  check('Go back one photo closes the panel and reopens the last photo', $('panel').hidden && $('count').textContent === '3 of 3' && $('nKeep').textContent === '2', $('count').textContent + ' keep ' + $('nKeep').textContent);
+  key('ArrowRight'); await sleep(40);
+  check('deciding again brings the panel back', /Pass 1 done/.test($('sheet').textContent));
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })); await sleep(30);
+  check('Ctrl+Z works on the pass 1 panel too', $('panel').hidden && $('count').textContent === '3 of 3', $('count').textContent);
 
   // everything rejected: no pass 2
   ({ $, key, btn, dest, add } = await load());
