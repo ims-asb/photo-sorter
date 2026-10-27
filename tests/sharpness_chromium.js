@@ -32,7 +32,7 @@ await p.waitForTimeout(2500);   // the background check finishes
 for(let i=0;i<3;i++){ await p.keyboard.press('ArrowRight'); await p.waitForTimeout(400); names.push(await p.textContent('#fname')); }
 console.log(names.join(' -> '));
 ok('starts at once in normal order', /IMG_00/.test(names[0]), names[0]);
-ok('then the blurriest photos come up next', /blur/.test(names[1]) && /blur/.test(names[2]), names);
+// (blurriest first was replaced by grouping similar shots; see grouping_chromium.js)
 await p.screenshot({path:'/tmp/claude-0/pw/sharp/soft.png'});
 ok('no errors', errs.length===0, errs);
 console.log(fails?fails+' FAILED':'ALL PASSED'); await b.close(); process.exit(fails?1:0);

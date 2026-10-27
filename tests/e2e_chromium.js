@@ -40,7 +40,7 @@ for(let i=0;i<25;i++) await step();
 await p.waitForTimeout(Math.max(0,45000-(Date.now()-t0)));
 const firstAfter=[]; for(let i=0;i<40;i++) firstAfter.push(await step());
 const blurInNext40=firstAfter.filter(n=>blurSet.has(n)).length; const blurIn25=[...decided.keys()].slice(0,25).filter(n=>blurSet.has(n)).length;
-ok('after the check, the blurred photos come up front', blurInNext40>=Math.min(30-blurIn25,35)-2, {blurInNext40,blurIn25});
+// (blurriest first was replaced by grouping similar shots, so there is no ordering check here)
 // undo test
 let st=await stat(); for(let i=0;i<3;i++) await p.keyboard.press('s'); await p.waitForTimeout(150);
 const st2=await stat(); ok('S undoes three, counts stay consistent', st2.i===st.i-3 && st2.k+st2.r===st2.i, {st,st2});

@@ -67,6 +67,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
 #zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
+#groupBadge{position:absolute;left:50%;transform:translateX(-50%);top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--edit);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none;white-space:nowrap}
 #softBadge{position:absolute;left:1.25rem;top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--grade);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none}
 #fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
@@ -213,7 +214,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <label class="check"><input type="checkbox" id="twoPassInput" checked>
       <span>Two passes: a quick cull first, then label what is left <small>Recommended. Skipped if you type categories above.</small></span></label>
     <label class="check"><input type="checkbox" id="softFirstInput">
-      <span>Show the blurriest photos first <small>Checked in the background while you sort. The softest photos move up front after a short while.</small></span></label>
+      <span>Group similar shots, sharpest first <small>Checked in the background while you sort. Burst shots end up together, and B keeps the best one and rejects the rest.</small></span></label>
 
     <div class="field">
       <label for="sortInput">Show the photos in this order</label>
@@ -249,6 +250,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <div id="fname"></div>
     <div id="zoomBadge" hidden></div>
     <div id="softBadge" hidden>Looks soft</div>
+    <div id="groupBadge" hidden></div>
     <div id="endMsg" hidden>
       <h2>That was the last photo</h2>
       <div><button id="endFinishBtn" class="btn" type="button">Finish and save</button></div>
@@ -394,6 +396,7 @@ function hintItems(){
   if (n) items.push([n === 1 ? '1' : '1-' + n, 'Keep and tag']);
   items.push(['↑ or W', 'Keep + needs post processing']);
   if (n) items.push(['Shift+' + (n === 1 ? '1' : '1-' + n), 'Tag + needs post processing']);
+  if (state.items.some(i => i.group)) items.push(['B', 'Keep this, reject its similar shots']);
   const vids = state.items.filter(i => i.video).length;
   if (vids) items.push(['Space', 'Play or pause'], ['M', 'Sound on or off']);
   if (vids < state.items.length) items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less']);
@@ -1110,8 +1113,9 @@ let showToken = 0;
 /* ---------- sharpness hint (plain math, not AI) ----------
    Shrinks the photo, takes the variance of its edges, and compares with the other photos in
    the batch. It only suggests: a soft photo gets a "Looks soft" tag, and nothing is rejected for you. */
-const sharp = new Map();   // photo key -> score
-async function sharpnessOf(blob){
+const sharp = new Map();    // photo key -> sharpness score
+const prints = new Map();   // photo key -> 64-bit fingerprint [high, low] used to spot similar shots
+async function analyze(blob){
   try {
     let bmp;
     try { bmp = await createImageBitmap(blob, { resizeWidth: 320, resizeQuality: 'low' }); }
@@ -1129,8 +1133,35 @@ async function sharpnessOf(blob){
       const i = y * w + x, v = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - w] - g[i + w];
       n++; sum += v; sq += v * v;
     }
-    return n ? sq / n - (sum / n) * (sum / n) : null;
+    if (!n) return null;
+    // fingerprint: shrink to a 9 by 8 grid and note whether each cell is brighter than its right neighbour
+    const cells = new Float32Array(72);
+    for (let gy = 0; gy < 8; gy++){
+      const y0 = Math.floor(gy * h / 8), y1 = Math.max(y0 + 1, Math.floor((gy + 1) * h / 8));
+      for (let gx = 0; gx < 9; gx++){
+        const x0 = Math.floor(gx * w / 9), x1 = Math.max(x0 + 1, Math.floor((gx + 1) * w / 9));
+        let t = 0, c = 0;
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++){ t += g[y * w + x]; c++; }
+        cells[gy * 9 + gx] = t / c;
+      }
+    }
+    let hi = 0, lo = 0, bit = 0;
+    for (let gy = 0; gy < 8; gy++) for (let gx = 0; gx < 8; gx++){
+      const b = cells[gy * 9 + gx] > cells[gy * 9 + gx + 1] ? 1 : 0;
+      if (bit < 32) hi = ((hi << 1) | b) >>> 0; else lo = ((lo << 1) | b) >>> 0;
+      bit++;
+    }
+    return { score: sq / n - (sum / n) * (sum / n), print: [hi, lo] };
   } catch (e){ return null; }
+}
+function keepResult(key, r){ if (r && r.score != null){ sharp.set(key, r.score); prints.set(key, r.print); } }
+const popcount = x => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24; };
+const GROUP_GAP_MS = 6000, GROUP_BITS = 10, GROUP_MAX = 12;   // and no group is bigger than 12, so B never rejects a huge pile   // shots this close in time and this alike go together
+function similar(a, b){
+  const pa = prints.get(a.key), pb = prints.get(b.key);
+  if (!pa || !pb) return false;
+  if (Math.abs((a.mtime || 0) - (b.mtime || 0)) > GROUP_GAP_MS) return false;
+  return popcount((pa[0] ^ pb[0]) >>> 0) + popcount((pa[1] ^ pb[1]) >>> 0) <= GROUP_BITS;
 }
 function isSoft(key){
   const v = sharp.get(key);
@@ -1140,11 +1171,15 @@ function isSoft(key){
 }
 function updateSoftBadge(){
   const it = state.items[state.index];
-  $('softBadge').hidden = !(it && state.mode === 'sort' && isSoft(it.key));
+  const on = it && state.mode === 'sort' && !it.video;
+  $('softBadge').hidden = !(on && isSoft(it.key));
+  const g = on && it.group;
+  $('groupBadge').hidden = !g;
+  if (g) $('groupBadge').textContent = `Similar shots ${g.pos} of ${g.size}` + (g.pos === 1 ? ' (sharpest)' : '');
 }
-/* Scores every photo in the background while you sort (4 at a time). When it finishes, the photos you
-   have not reviewed yet move so the softest come first. The move happens right after a decision,
-   so the photo you are looking at never changes under you. */
+/* Looks at every photo in the background while you sort (4 at a time). When it finishes, the photos you
+   have not reviewed yet are grouped: shots taken seconds apart that look alike go together, sharpest
+   first. The move happens right after a decision, so the photo you are looking at never changes under you. */
 let scoreToken = 0;
 async function scoreInBackground(){
   const token = ++scoreToken;
@@ -1154,25 +1189,49 @@ async function scoreInBackground(){
     while (token === scoreToken && next < items.length){
       const it = items[next++];
       if (it.video || sharp.has(it.key)) continue;
-      let v = null;
-      try { v = await sharpnessOf((await photoBlob(it)).blob); } catch (e){}
-      if (v != null) sharp.set(it.key, v);
+      try { keepResult(it.key, await analyze((await photoBlob(it)).blob)); } catch (e){}
     }
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
   if (token === scoreToken && state.round === 1) state.pendingReorder = true;
 }
+let groupSeq = 0;
 function reorderRemaining(){
   state.pendingReorder = false;
   const slots = [];
   for (let i = state.index; i < state.items.length; i++) if (!state.decisions[i]) slots.push(i);
   if (slots.length < 2) return;
-  const moved = slots.map(i => state.items[i]).sort((a, b) => {
-    const va = sharp.get(a.key), vb = sharp.get(b.key);
-    return (va == null) - (vb == null) || (va ?? 0) - (vb ?? 0) || (a.orderIdx ?? 0) - (b.orderIdx ?? 0);
-  });
-  slots.forEach((i, k) => { state.items[i] = moved[k]; });
+  const list = slots.map(i => state.items[i]).sort((a, b) => (a.orderIdx ?? 0) - (b.orderIdx ?? 0));
+  const groups = []; let cur = [];
+  for (const it of list){
+    const prev = cur[cur.length - 1];
+    if (prev && cur.length < GROUP_MAX && !prev.video && !it.video && similar(prev, it)) cur.push(it);
+    else { if (cur.length) groups.push(cur); cur = [it]; }
+  }
+  if (cur.length) groups.push(cur);
+  const out = [];
+  for (const g of groups){
+    g.sort((a, b) => (sharp.get(b.key) ?? -1) - (sharp.get(a.key) ?? -1) || (a.orderIdx ?? 0) - (b.orderIdx ?? 0));
+    const id = ++groupSeq;
+    g.forEach((it, k) => { it.group = g.length > 1 ? { id, size: g.length, pos: k + 1 } : null; out.push(it); });
+  }
+  slots.forEach((i, k) => { state.items[i] = out[k]; });
   clearCache();
+  if (out.some(it => it.group)) buildHints();
+}
+
+/* B: keep this photo and reject the rest of its group of similar shots */
+function keepBest(){
+  const cur = state.items[state.index];
+  if (state.mode !== 'sort' || state.round !== 1 || !cur || !cur.group) return;
+  const gid = cur.group.id;
+  const mates = new Set(state.items.filter((it, j) => j > state.index && it.group && it.group.id === gid && !state.decisions[j]).map(it => it.key));
+  decide('keep');
+  state.items.forEach((it, j) => { if (mates.has(it.key) && !state.decisions[j]){ state.decisions[j] = 'reject'; store[it.key] = 'reject'; } });
+  persist();
+  while (state.index < state.items.length && state.decisions[state.index]) state.index++;
+  render();
+  if (state.index >= state.items.length) openFinish();
 }
 
 function ensureUrl(i){
@@ -1185,7 +1244,7 @@ function ensureUrl(i){
       e.url = URL.createObjectURL(p.blob);
       e.info = p.info;
       const key = state.items[i] && state.items[i].key;
-      if (key && !state.items[i].video && !sharp.has(key)) sharpnessOf(p.blob).then(v => { if (v != null){ sharp.set(key, v); updateSoftBadge(); } });
+      if (key && !state.items[i].video && !sharp.has(key)) analyze(p.blob).then(r => { if (r){ keepResult(key, r); updateSoftBadge(); } });
       if (!(state.items[i] && state.items[i].video)){
         try {
           const warm = new Image();
@@ -1253,7 +1312,7 @@ async function showPhoto(i){
   if (state.items[i].video){
     const c = $('clip'), it = state.items[i];
     img.removeAttribute('src');
-    $('softBadge').hidden = true;
+    $('softBadge').hidden = true; $('groupBadge').hidden = true;
     const base = it.name + ' · ' + mbText(it.size);
     $('fname').textContent = base;
     if (url){
@@ -1325,7 +1384,7 @@ function render(){
 
   const vid = !atEnd && state.items[state.index] && state.items[state.index].video;
   $('endMsg').hidden = !atEnd;
-  if (atEnd || vid) $('softBadge').hidden = true;
+  if (atEnd || vid){ $('softBadge').hidden = true; $('groupBadge').hidden = true; }
   $('photo').hidden = atEnd || !!vid;
   $('clip').hidden = !vid;
   if (!vid) stopClip();
@@ -1827,6 +1886,7 @@ function bindSortControls(){
     if (e.key === 'ArrowRight' || k === 'd'){ e.preventDefault(); if (!e.repeat) decide('keep'); }
     else if (e.key === 'ArrowLeft' || k === 'a'){ e.preventDefault(); if (!e.repeat) decide('reject'); }
     else if (tagNumber(e) && state.tags[tagNumber(e) - 1]){ e.preventDefault(); if (!e.repeat) decide(state.tags[tagNumber(e) - 1].code, e.shiftKey); }
+    else if (k === 'b' && !e.repeat){ e.preventDefault(); keepBest(); }
     else if (e.key === ' ' && !e.repeat){ e.preventDefault(); toggleClip(); }
     else if (k === 'm' && !e.repeat){ e.preventDefault(); clipMuted = !$('clip').muted; $('clip').muted = clipMuted; setNote(clipMuted ? 'Sound off' : 'Sound on'); clearTimeout(undoTipTimer); undoTipTimer = setTimeout(() => setNote(noteText()), 1500); }
     else if ((e.key === 'z' || e.key === 'Z') && !e.repeat){ e.preventDefault(); setZoom(!zoomed); }
