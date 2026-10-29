@@ -20,7 +20,6 @@ await p.evaluate(async({sharpB,blurB,N,blurIdx})=>{
   for(let i=0;i<N;i++){const f=await d.getFileHandle('IMG_'+String(i).padStart(4,'0')+'.jpg',{create:true});const w=await f.createWritable();await w.write(new Blob([blurIdx.includes(i)?B:S,new Uint8Array(i%251)]));await w.close();}
 },{sharpB,blurB,N,blurIdx:[...blurIdx]});
 console.log('seeded',N,'photos,',blurSet.size,'blurred');
-await p.fill('#eventInput','Bug check');
 await p.click('#chooseFolderBtn'); await p.waitForSelector('#sort:not([hidden])');
 const t0=Date.now();
 const cnt=async()=>+(/^(\d+)/.exec(await p.textContent('#count'))[1]);

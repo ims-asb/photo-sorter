@@ -23,7 +23,6 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const dest = win.dh('Out'); win.__picker = async () => dest;
   await sleep(30);
 
-  $('eventInput').value = 'Games';
   const files = ['a','b','c','d','e'].map((n, i) => new win.File(['d' + n], n + '.jpg', { lastModified: i + 1, type: 'image/jpeg' }));
   Object.defineProperty($('fileInput'), 'files', { value: files, configurable: true });
   $('fileInput').dispatchEvent(new win.Event('change'));
@@ -53,7 +52,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('finish after round 2 has no second round button', !btn(/Next: sort/), $('sheet').textContent.slice(0, 150));
   check('round 1 choices untouched in the browser', win.localStorage.getItem('photosorter:v2:decisions') === saved1);
   btn(/Save sorted/).click(); await sleep(300);
-  const out = dest.kids.get('Games - sorted');
+  const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('Soccer has a', names(out && out.kids.get('Soccer')) === 'a.jpg', names(out && out.kids.get('Soccer')));
   check('flag carried into round 2: Needs post processing/Volleyball has b', names(out && out.kids.get('Needs post processing') && out.kids.get('Needs post processing').kids.get('Volleyball')) === 'b.jpg');

@@ -27,12 +27,10 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   win.showDirectoryPicker = async () => dest;
   await sleep(30);
 
-  $('eventInput').value = 'Spring Dance';
   const files = ['a','b','c','d','e'].map((n, i) => jpg(n + '.jpg', i + 1));
   Object.defineProperty($('fileInput'), 'files', { value: files, configurable: true });
   $('fileInput').dispatchEvent(new win.Event('change'));
   await sleep(150);
-  check('typed event name is used', $('eventTitle').textContent === 'Spring Dance', $('eventTitle').textContent);
 
   // a: edit + keep, b: keep, c: edit + 7th, d: edit then reject (flag ignored), e: undo test
   key('ArrowUp'); await sleep(10);
@@ -58,7 +56,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
 
   btn(/Save sorted/).click();
   await sleep(300);
-  const out = dest.kids.get('Spring Dance - sorted');
+  const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   check('folder named after event', !!out);
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('Keep has only b', names(out.kids.get('Keep')) === 'b.jpg', names(out.kids.get('Keep')));

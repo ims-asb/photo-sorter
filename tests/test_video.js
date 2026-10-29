@@ -20,7 +20,6 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const btn = re => Array.from($('sheet').querySelectorAll('button')).find(b => re.test(b.textContent));
   const dest = win.dh('Out'); win.showDirectoryPicker = async () => dest;
   await sleep(30);
-  $('eventInput').value = 'Clips';
   const mk = (n, t) => new win.File(['video-bytes-' + n], n, { lastModified: t, type: 'video/mp4' });
   Object.defineProperty($('fileInput'), 'files', { value: [mk('a.mp4',1), mk('b.mov',2), mk('c.webm',3), mk('d.mp4',4)], configurable: true });
   $('fileInput').dispatchEvent(new win.Event('change'));
@@ -36,7 +35,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('finish speaks of clips', /All clips sorted/.test($('sheet').textContent), $('sheet').textContent.slice(0, 80));
   check('the clip is hidden at the end', $('clip').hidden);
   btn(/Save sorted clips/).click(); await sleep(300);
-  const out = dest.kids.get('Clips - sorted');
+  const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('kept clips copied with their own names', names(out && out.kids.get('Keep')) === 'a.mp4,d.mp4', names(out && out.kids.get('Keep')));
   check('flagged clip in post processing', names(out && out.kids.get('Needs post processing') && out.kids.get('Needs post processing').kids.get('Keep')) === 'c.webm');

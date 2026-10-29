@@ -26,7 +26,6 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   doc.querySelector('[data-preset="sports"]').click();
   check('sports preset fills the field', /Volleyball, Soccer/.test($('tagsInput').value));
   $('tagsInput').value = 'Volleyball, Soccer, cross country, soccer, Track+Field';
-  $('eventInput').value = 'Sept 1';
   const files = ['a','b','c','d','e'].map((n, i) => new win.File(['d' + n], n + '.jpg', { lastModified: i + 1, type: 'image/jpeg' }));
   Object.defineProperty($('fileInput'), 'files', { value: files, configurable: true });
   $('fileInput').dispatchEvent(new win.Event('change'));
@@ -45,7 +44,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('finish lists the tags', /Volleyball/.test($('sheet').textContent) && /cross country/.test($('sheet').textContent));
   Array.from($('sheet').querySelectorAll('button')).find(b => /Save sorted/.test(b.textContent)).click();
   await sleep(300);
-  const out = dest.kids.get('Sept 1 - sorted');
+  const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('Volleyball folder', names(out.kids.get('Volleyball')) === 'a.jpg');
   check('Soccer folder', names(out.kids.get('Soccer')) === 'b.jpg', names(out.kids.get('Soccer')));

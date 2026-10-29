@@ -8,7 +8,6 @@ const p=await b.newPage({viewport:{width:1200,height:800}}); const errs=[]; p.on
 await p.addInitScript(()=>{ window.showDirectoryPicker=async()=>{const r=await navigator.storage.getDirectory(); try{await r.removeEntry('vout',{recursive:true})}catch(e){} return r.getDirectoryHandle('vout',{create:true});}; });
 await p.goto('http://localhost:8769/index.html?passes=1');
 const dir='/tmp/claude-0/pw/vid/'; const files=['clip1.webm','clip2.webm','clip3.webm','nopreview.mp4'];
-await p.fill('#eventInput','Video test');
 await p.setInputFiles('#fileInput',files.map(f=>dir+f));
 await p.waitForSelector('#sort:not([hidden])');
 await p.waitForFunction(()=>{const c=document.getElementById('clip');return !c.hidden&&c.readyState>=2});

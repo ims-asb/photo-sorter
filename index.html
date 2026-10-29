@@ -186,12 +186,6 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
       <input id="fileInput" type="file" multiple accept="image/*,video/*,.cr2,.zip,.mp4,.mov,.m4v,.webm,.mkv" hidden>
     </div>
 
-    <div class="field">
-      <label for="eventInput">What photos are these for?</label>
-      <input id="eventInput" type="text" autocomplete="off" list="eventOptions" placeholder="For example: Spring Dance">
-      <datalist id="eventOptions"></datalist>
-    </div>
-
     <details class="more">
       <summary>More options</summary>
     <div class="field">
@@ -203,12 +197,6 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
         <button class="btn ghost" type="button" data-preset="none">None</button>
       </div>
       <small class="hint">Leave this empty to just keep or reject. You can sort the photos you keep into categories afterward.</small>
-    </div>
-
-    <div class="field">
-      <label for="eventsList">Your event names (one per line, shows up as a pick list above)</label>
-      <textarea id="eventsList" rows="4" placeholder="Spring Dance&#10;Volleyball game&#10;Quah assembly"></textarea>
-      <small class="hint">Saved on this computer only.</small>
     </div>
 
     <label class="check"><input type="checkbox" id="twoPassInput" checked>
@@ -299,7 +287,6 @@ const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th gr
 const baseCode = d => d ? d.split('+')[0] : d;
 const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
 const SETTINGS_KEY = 'photosorter:v1:settings';
-const EVENTS_KEY = 'photosorter:v1:events';
 const DECISIONS_KEY = 'photosorter:v2:decisions';
 
 const $ = id => document.getElementById(id);
@@ -744,21 +731,7 @@ function setBusy(busy){
   $('chooseFolderBtn').disabled = busy;
 }
 
-function eventNames(){
-  const v = readJSON(EVENTS_KEY);
-  return Array.isArray(v) ? v : [];
-}
-function refreshEventOptions(){
-  $('eventOptions').replaceChildren(...eventNames().map(n => el('option', { value: n })));
-}
-
 function initStart(){
-  $('eventsList').value = eventNames().join('\n');
-  $('eventsList').addEventListener('input', () => {
-    writeJSON(EVENTS_KEY, $('eventsList').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 50));
-    refreshEventOptions();
-  });
-  refreshEventOptions();
   const s = readJSON(SETTINGS_KEY);
   const oneOnly = new URLSearchParams(location.search).get('passes') === '1';
   $('twoPassInput').checked = oneOnly ? false : !(s && s.twoPass === false);
@@ -846,7 +819,6 @@ async function showContinueCard(){
       setStartMsg('Chrome needs your permission to open those photos again. Press Continue and choose Allow, or add the photos the usual way.', true);
       return;
     }
-    $('eventInput').value = sess.eventName || '';
     $('tagsInput').value = sess.tagsText || '';
     if (sess.sortBy === 'name' || sess.sortBy === 'time') $('sortInput').value = sess.sortBy;
     setBusy(false);
@@ -1001,9 +973,8 @@ async function ingest(handles, opts){
   const dirs = handles.filter(h => h && h.kind === 'directory');
   state.sourceDir = opts.folder || null;
   state.folderName = opts.folder ? opts.folder.name : '';
-  const typedName = $('eventInput').value.trim();
-  state.eventName = typedName || (opts.folder ? opts.folder.name
-                  : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName()));
+  state.eventName = opts.folder ? opts.folder.name
+                  : (dirs.length === 1 && handles.length === 1 ? dirs[0].name : defaultEventName());
   state.tags = parseTags($('tagsInput').value);
   state.tagsText = $('tagsInput').value;
   state.twoPass = $('twoPassInput').checked && !state.tags.length;
@@ -1097,7 +1068,6 @@ function resetToStart(){
   state.originalCount = 0;
   state.skipPass2 = false;
   state.tags = [];
-  $('eventInput').value = '';
   clearCache();
   $('photo').removeAttribute('src');
   $('sort').hidden = true;
@@ -1618,7 +1588,7 @@ function openFinish(){
   if (state.round === 1 && state.twoPass && !state.skipPass2 && unsorted === 0 && toCopy > 0) return openRound2(true);
 
   const where = el('p');
-  const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', list: 'eventOptions', value: state.eventName });
+  const nameInput = el('input', { type: 'text', id: 'finishName', autocomplete: 'off', value: state.eventName });
   const refreshWhere = () => {
     where.textContent = `Saving copies ${toCopy} ${unitWord(toCopy)} into a new folder called “${outputFolderName()}” ${whereText()}. Photos that need post processing go in a “${EDIT_FOLDER}” folder inside it, sorted the same way. Rejected photos are not copied. Your originals are not changed or deleted.`;
   };

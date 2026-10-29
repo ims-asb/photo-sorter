@@ -168,3 +168,6 @@ Update (Oct 26): clips now play WITH sound by default (clipMuted starts false). 
 Fix (Oct 27): "Go back one photo" on the pass 1 done panel (and Ctrl+Z there) did nothing, because undo() only worked from the finish panel. undo() and the Ctrl+Z check now also allow the 'round2' panel kind. Test added in tests/test_twopass.js.
 
 Oct 27: tests/e2e_chromium.js and tests/sharpness_chromium.js no longer check blurriest-first ordering (removed feature).
+
+## 26. One layout, no event choosing (Oct 29)
+Luke asked to drop the event names. The start screen no longer has "What photos are these for?" or the event names list (sections 16, and notes 3, 13 and 31 above are out of date on this). The sorted folder is now named after the chosen folder, or "Photos <date>" for dragged files, and it can still be renamed in the finish panel (no pick list there anymore). The `photosorter:v1:events` key is no longer read or written. Tests updated: test_events.js now checks the box is gone, other tests find the output folder by its "- sorted" suffix.

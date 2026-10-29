@@ -30,7 +30,6 @@ async function load(){
   // default flow
   let { win, doc, $, key, btn, dest, add } = await load();
   check('two passes is on by default', $('twoPassInput').checked);
-  $('eventInput').value = 'Games';
   await add(['a','b','c','d','e']);
   check('pass 1 note', /Pass 1 of 2/.test($('note').textContent), $('note').textContent);
   key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowLeft'); await sleep(40);
@@ -46,7 +45,7 @@ async function load(){
   key('1'); key('ArrowRight'); key('2'); key('ArrowLeft'); await sleep(40);   // a Soccer, b plain keep, c Volleyball, d dropped
   check('finish after pass 2 (no third pass)', /All photos sorted/.test($('sheet').textContent) && !btn(/Next: sort/), $('sheet').textContent.slice(0, 100));
   btn(/Save sorted/).click(); await sleep(300);
-  const out = dest.kids.get('Games - sorted');
+  const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('Soccer has a', names(out && out.kids.get('Soccer')) === 'a.jpg', names(out && out.kids.get('Soccer')));
   check('Volleyball has c', names(out && out.kids.get('Volleyball')) === 'c.jpg');
@@ -55,14 +54,13 @@ async function load(){
 
   // skip pass 2
   ({ $, key, btn, dest, add } = await load());
-  $('eventInput').value = 'Skip';
   await add(['a','b','c']);
   key('ArrowRight'); key('ArrowLeft'); key('ArrowRight'); await sleep(40);
   btn(/Skip pass 2 and save/).click(); await sleep(20);
   check('skipping goes to the normal finish panel', /All photos sorted/.test($('sheet').textContent) && !!btn(/Save sorted/));
   btn(/Save sorted/).click(); await sleep(300);
   const names2 = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
-  check('skip saved the 2 kept', names2(dest.kids.get('Skip - sorted') && dest.kids.get('Skip - sorted').kids.get('Keep')) === 'a.jpg,c.jpg');
+  check('skip saved the 2 kept', names2([...dest.kids.values()].find(k => / - sorted$/.test(k.name)) && [...dest.kids.values()].find(k => / - sorted$/.test(k.name)).kids.get('Keep')) === 'a.jpg,c.jpg');
 
   // categories typed means one pass; unchecking means one pass
   ({ $, key, btn, dest, add } = await load());
