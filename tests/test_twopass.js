@@ -35,10 +35,13 @@ async function load(){
   key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowLeft'); await sleep(40);
   check('pass 1 ends with the pass 2 offer', /Pass 1 done/.test($('sheet').textContent) && /4 of 5 photos are left/.test($('sheet').textContent), $('sheet').textContent.slice(0, 120));
   check('pass 2 offer asks for categories', !!$('round2Tags'));
+  check('pass 2 offer is already filled in the first time', $('round2Tags').value === 'Volleyball, Soccer, Cross country, Basketball', $('round2Tags').value);
+  $('round2Tags').value = '';
   btn(/Start pass 2/).click(); await sleep(20);
   check('pass 2 will not start without categories', /Pass 1 done/.test($('sheet').textContent));
   $('round2Tags').value = 'Soccer, Volleyball';
   btn(/Start pass 2/).click(); await sleep(20);
+  check('the labels are remembered for next time', JSON.parse(win.localStorage.getItem('photosorter:v1:pass2tags')) === 'Soccer, Volleyball');
   check('pass 2 has only the 4 survivors', $('count').textContent === '1 of 4', $('count').textContent);
   check('pass 2 note says label', /Pass 2 of 2: label/.test($('note').textContent), $('note').textContent);
   check('pass 2 shows the category buttons', doc.querySelectorAll('#tagRow .grade').length === 2 && !$('grades').hidden);

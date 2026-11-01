@@ -38,6 +38,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const saved1 = win.localStorage.getItem('photosorter:v2:decisions');
   btn(/Next: sort/).click(); await sleep(10);
   check('asks for categories', /Sort into categories/.test($('sheet').textContent));
+  $('round2Tags').value = '';
   btn(/^Start$/).click(); await sleep(10);
   check('empty categories do not start', /Sort into categories/.test($('sheet').textContent));
   $('round2Tags').value = 'Soccer, Volleyball';

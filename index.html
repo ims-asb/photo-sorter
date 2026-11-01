@@ -287,6 +287,7 @@ const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th gr
 const baseCode = d => d ? d.split('+')[0] : d;
 const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
 const SETTINGS_KEY = 'photosorter:v1:settings';
+const PASS2_KEY = 'photosorter:v1:pass2tags';   // the labels used last time, so pass 2 looks the same every time
 const DECISIONS_KEY = 'photosorter:v2:decisions';
 
 const $ = id => document.getElementById(id);
@@ -1420,9 +1421,12 @@ function openRound2(auto){
   auto = auto === true;
   const left = state.decisions.filter(d => { const b = baseCode(d); return b && b !== 'reject'; }).length;
   const input = el('input', { type: 'text', id: 'round2Tags', autocomplete: 'off', placeholder: 'For example: Volleyball, Soccer, Cross country' });
+  const last = readJSON(PASS2_KEY);
+  input.value = typeof last === 'string' && last.trim() ? last : PRESETS.sports;
   const start = () => {
     const tags = parseTags(input.value);
     if (!tags.length){ input.focus(); return; }
+    writeJSON(PASS2_KEY, input.value);
     startRound2(tags);
   };
   input.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); start(); } });
@@ -1444,6 +1448,7 @@ function openRound2(auto){
     )
   ]);
   input.focus();
+  input.select();
 }
 
 function startRound2(tags){
