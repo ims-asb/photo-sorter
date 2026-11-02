@@ -181,3 +181,5 @@ Nov 2: a plain keep marked for editing now sits directly in `Needs post processi
 
 ## 28. Star and bigger file name (Nov 2)
 The file name under the photo is now larger and bright, with a round star button beside it. F (or clicking the star) stars the current photo. Stars are remembered per photo key in localStorage `photosorter:v1:stars`, are not part of undo (press F again), and carry into pass 2. At save, every starred photo that was kept is also copied into a `Starred/` folder in the output (its normal folder copy stays), and the summary adds "N starred". Starred but rejected photos are not saved. Test: tests/test_star.js. Checked in real Chromium for layout (screenshot); the "copied" count on the Saved panel includes the Starred copies.
+
+Nov 2: "Start over" on the "Pick up where you left off?" panel now asks first ("Start over?" with "No, keep my choices" and "Yes, start over"), because pressing it by mistake wiped a day of keep and reject choices. Saved folders were never touched. Test: test_dragdrop.js.

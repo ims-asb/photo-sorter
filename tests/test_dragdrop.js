@@ -113,7 +113,13 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   drop([A, B]);
   await sleep(150);
   check('resume offered for same photos from anywhere', /Pick up where you left off/.test($('sheet').textContent) && /sorted 5 of these 5/.test($('sheet').textContent), $('sheet').textContent.slice(0, 90));
-  Array.from($('sheet').querySelectorAll('button')).find(b => /Start over/.test(b.textContent)).click();
+  const sb = re => Array.from($('sheet').querySelectorAll('button')).find(b => re.test(b.textContent));
+  sb(/Start over/).click(); await sleep(20);
+  check('start over asks first', /Start over\?/.test($('sheet').textContent) && $('count').textContent !== '1 of 5' || /Start over\?/.test($('sheet').textContent));
+  sb(/No, keep my choices/).click(); await sleep(20);
+  check('saying no keeps the choices and the resume offer', /Pick up where you left off/.test($('sheet').textContent));
+  sb(/Start over/).click(); await sleep(20);
+  sb(/Yes, start over/).click();
   await sleep(20);
   check('start over resets', $('count').textContent === '1 of 5' && $('nKeep').textContent === '0');
 

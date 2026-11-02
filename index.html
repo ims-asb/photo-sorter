@@ -1064,7 +1064,19 @@ function openResumePanel(restored, resumeAt){
     el('div', { class: 'row' },
       el('button', { class: 'btn primary', type: 'button', text: resumeAt >= total ? 'Review and save' : `Resume at photo ${resumeAt + 1}`,
         onclick: () => { closePanel(); beginSorting(resumeAt); } }),
-      el('button', { class: 'btn ghost', type: 'button', text: 'Start over',
+      el('button', { class: 'btn ghost', type: 'button', text: 'Start over', onclick: () => confirmStartOver(restored, resumeAt) })
+    )
+  ]);
+}
+
+function confirmStartOver(restored, resumeAt){
+  const total = state.items.length;
+  openPanel('resume', [
+    el('h2', { text: 'Start over?' }),
+    el('p', { text: `This forgets your keep and reject choices for ${restored} ${unitWord(restored)}. You will sort them all again. Folders you already saved are not touched.` }),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'No, keep my choices', onclick: () => openResumePanel(restored, resumeAt) }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Yes, start over',
         onclick: () => {
           state.items.forEach(it => { delete store[it.key]; });
           state.decisions = new Array(total).fill(null);
