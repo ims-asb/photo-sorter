@@ -38,7 +38,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const out = [...dest.kids.values()].find(k => / - sorted$/.test(k.name));
   const names = d => d ? Array.from(d.kids.keys()).sort().join(',') : '(none)';
   check('kept clips copied with their own names', names(out && out.kids.get('Keep')) === 'a.mp4,d.mp4', names(out && out.kids.get('Keep')));
-  check('flagged clip in post processing', names(out && out.kids.get('Needs post processing') && out.kids.get('Needs post processing').kids.get('Keep')) === 'c.webm');
+  check('flagged clip in post processing', names(out && out.kids.get('Needs post processing') && out.kids.get('Needs post processing')) === 'c.webm');
   const a = out.kids.get('Keep').kids.get('a.mp4').file;
   check('copied byte for byte (no conversion)', a.size === 'video-bytes-a.mp4'.length, a.size);
   check('rejected clip not copied', !JSON.stringify([...out.kids.keys()]).includes('b.mov') && !Array.from(out.kids.values()).some(k => k.kids.has('b.mov')));

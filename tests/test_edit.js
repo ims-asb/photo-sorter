@@ -62,9 +62,9 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   check('Keep has only b', names(out.kids.get('Keep')) === 'b.jpg', names(out.kids.get('Keep')));
   const pp = out.kids.get('Needs post processing');
   check('post processing folder exists', !!pp);
-  check('flagged keeps in post processing/Keep', names(pp && pp.kids.get('Keep')) === 'a.jpg,e.jpg', names(pp && pp.kids.get('Keep')));
+  check('flagged keeps sit directly in post processing, no Keep folder', pp.kids.has('a.jpg') && pp.kids.has('e.jpg') && !pp.kids.has('Keep'), names(pp));
   check('flagged grade in post processing/7th', names(pp && pp.kids.get('7th grade candids')) === 'c.jpg');
-  check('rejected never copied', ![out, pp].some(d => JSON.stringify([...d.kids.keys()]).includes('d.jpg')) && !Array.from(pp.kids.values()).some(k => k.kids.has('d.jpg')));
+  check('rejected never copied', ![out, pp].some(d => JSON.stringify([...d.kids.keys()]).includes('d.jpg')) && !Array.from(pp.kids.values()).some(k => k.kids && k.kids.has('d.jpg')));
   check('no plain 7th folder when empty', !out.kids.has('7th grade candids'));
 
   console.log(failures ? failures + ' FAILED' : 'ALL PASSED');

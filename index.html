@@ -1724,7 +1724,8 @@ async function saveAll(){
       j.id = id;
       if (!dirs[id]){
         const parent = j.edit ? await outDir.getDirectoryHandle(EDIT_FOLDER, { create: true }) : outDir;
-        dirs[id] = await parent.getDirectoryHandle(j.folder, { create: true });
+        // a plain keep that needs editing goes straight in the edit folder, no extra Keep folder
+        dirs[id] = j.edit && j.folder === 'Keep' ? parent : await parent.getDirectoryHandle(j.folder, { create: true });
       }
     }
     for (const j of jobs){

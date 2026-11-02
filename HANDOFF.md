@@ -176,3 +176,5 @@ Later, Oct 29/Nov 1: the pass 2 label box is filled in for you, so pass 2 looks 
 
 ## 27. Pass 2 labels follow the season (Nov 2)
 The pass 2 label box starts with the sports in season today, using the SEASONS table in index.html (first practice to last game, taken from calendar.html's data; update both when the next year's schedule is entered). Out of season it falls back to the labels used last time, then to the Sports quick fill. A "Last time" chip appears when the remembered labels differ from what is shown. `?today=YYYY-MM-DD` in the URL pretends it is that day (tests use it). Tests: test_twopass.js.
+
+Nov 2: a plain keep marked for editing now sits directly in `Needs post processing/`, with no extra `Keep` folder inside it. Category photos still go in `Needs post processing/<category>/`.

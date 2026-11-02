@@ -34,7 +34,7 @@ await p.waitForSelector('#sheet button.primary');
 await p.click('text=/Save sorted clips/'); await p.waitForSelector('#sheet h2:has-text("Saved")',{timeout:30000});
 const out=await p.evaluate(async()=>{const r=await navigator.storage.getDirectory(); const d=await r.getDirectoryHandle('vout'); const o=await d.getDirectoryHandle('Video test - sorted'); const res={}; const walk=async(h,pre)=>{for await(const [n,x] of h.entries()){ if(x.kind==='directory') await walk(x,pre+n+'/'); else res[pre+n]=Array.from(new Uint8Array(await (await x.getFile()).arrayBuffer())); }}; await walk(o,''); return res;});
 console.log('saved:',Object.keys(out).join(', '));
-ok('kept clips are copied byte for byte', ['Keep/clip1.webm','Keep/nopreview.mp4','Needs post processing/Keep/clip3.webm'].every(k=>out[k]&&md5(Buffer.from(out[k]))===md5(fs.readFileSync(dir+k.split('/').pop()))));
+ok('kept clips are copied byte for byte', ['Keep/clip1.webm','Keep/nopreview.mp4','Needs post processing/clip3.webm'].every(k=>out[k]&&md5(Buffer.from(out[k]))===md5(fs.readFileSync(dir+k.split('/').pop()))));
 ok('the rejected clip is not saved', !Object.keys(out).some(k=>/clip2/.test(k)));
 ok('no page errors', errs.length===0, errs);
 console.log(fails?fails+' FAILED':'ALL PASSED'); await b.close(); process.exit(fails?1:0);
