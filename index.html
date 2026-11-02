@@ -66,10 +66,12 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #clip{width:100%;height:100%;object-fit:contain;display:block;background:#000}
 #hints{grid-column:1/-1;display:flex;gap:.4rem 1.1rem;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:.82rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
+#starBtn{position:absolute;left:1.25rem;bottom:.35rem;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.55);color:var(--muted);font-size:1.3rem;line-height:1;cursor:pointer;padding:0}
+#starBtn.on{color:var(--grade);border-color:var(--grade)}
 #zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
 #groupBadge{position:absolute;left:50%;transform:translateX(-50%);top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--edit);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none;white-space:nowrap}
 #softBadge{position:absolute;left:1.25rem;top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--grade);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none}
-#fname{position:absolute;left:1.25rem;bottom:.7rem;font-size:.82rem;color:var(--muted);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fname{position:absolute;left:3.6rem;bottom:.7rem;font-size:1rem;color:var(--text);text-shadow:0 1px 3px rgba(0,0,0,.8);max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #endMsg{position:absolute;inset:0;display:grid;place-content:center;gap:1rem;text-align:center}
 #endMsg h2{margin:0;font-size:1.6rem}
 
@@ -235,6 +237,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
   <section id="stage">
     <img id="photo" alt="">
     <video id="clip" playsinline loop muted controls hidden></video>
+    <button id="starBtn" type="button" title="Star this one (F)" aria-label="Star this one">☆</button>
     <div id="fname"></div>
     <div id="zoomBadge" hidden></div>
     <div id="softBadge" hidden>Looks soft</div>
@@ -298,6 +301,9 @@ function inSeason(){
 }
 const MAX_TAGS = 8;
 const EDIT_FOLDER = 'Needs post processing';
+const STAR_FOLDER = 'Starred';          // starred keepers are also copied here
+const STARS_KEY = 'photosorter:v1:stars';
+const stars = readJSON(STARS_KEY) || {};   // photo key -> true
 const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th grade and flag for editing
 const baseCode = d => d ? d.split('+')[0] : d;
 const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
@@ -403,7 +409,7 @@ function hintItems(){
   const vids = state.items.filter(i => i.video).length;
   if (vids) items.push(['Space', 'Play or pause'], ['M', 'Sound on or off']);
   if (vids < state.items.length) items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less']);
-  items.push(['G', 'Go to ' + unitWord(1)], ['Ctrl+Z or S', 'Undo']);
+  items.push(['F', 'Star it (also copied to a Starred folder)'], ['G', 'Go to ' + unitWord(1)], ['Ctrl+Z or S', 'Undo']);
   return items;
 }
 function buildHints(){
@@ -767,6 +773,7 @@ function initStart(){
   showContinueCard();
   $('addBtn').addEventListener('click', choosePhotos);
   $('helpBtn').addEventListener('click', openHelp);
+  $('starBtn').addEventListener('click', e => { e.stopPropagation(); toggleStar(); e.currentTarget.blur(); });
   $('fileInput').addEventListener('change', e => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -1375,8 +1382,24 @@ function render(){
   $('clip').hidden = !vid;
   if (!vid) stopClip();
   $('fname').hidden = atEnd;
+  updateStar();
 
   if (!atEnd) showPhoto(state.index);
+}
+
+function updateStar(){
+  const atEnd = state.index >= state.items.length;
+  const on = !atEnd && !!stars[state.items[state.index].key];
+  $('starBtn').hidden = atEnd;
+  $('starBtn').classList.toggle('on', on);
+  $('starBtn').textContent = on ? '★' : '☆';
+}
+function toggleStar(){
+  if (state.index >= state.items.length) return;
+  const k = state.items[state.index].key;
+  if (stars[k]) delete stars[k]; else stars[k] = true;
+  writeJSON(STARS_KEY, stars);
+  updateStar();
 }
 
 function decide(code, edit){
@@ -1713,13 +1736,15 @@ async function saveAll(){
     if (!b || b === 'reject') return;
     jobs.push({ i, folder: folderFor(b), edit: isEdit(code) });
   });
+  const starJobs = jobs.filter(j => stars[state.items[j.i].key]).map(j => ({ i: j.i, folder: STAR_FOLDER, edit: false }));
+  const work = jobs.concat(starJobs);
 
   let copied = 0, already = 0, done = 0;
   const failed = [];
   try {
     const outDir = await dest.getDirectoryHandle(outputFolderName(), { create: true });
     const dirs = {};
-    for (const j of jobs){
+    for (const j of work){
       const id = (j.edit ? EDIT_FOLDER + '/' : '') + j.folder;
       j.id = id;
       if (!dirs[id]){
@@ -1728,7 +1753,7 @@ async function saveAll(){
         dirs[id] = j.edit && j.folder === 'Keep' ? parent : await parent.getDirectoryHandle(j.folder, { create: true });
       }
     }
-    for (const j of jobs){
+    for (const j of work){
       try {
         const result = await copyOne(state.items[j.i], dirs[j.id]);
         if (result === 'copied') copied++; else already++;
@@ -1736,14 +1761,14 @@ async function saveAll(){
         failed.push(`${state.items[j.i].name} (${err && err.message ? err.message : 'could not be saved'})`);
       }
       done++;
-      bar.style.width = (done / jobs.length * 100) + '%';
-      status.textContent = `Copied ${done} of ${jobs.length}`;
+      bar.style.width = (done / work.length * 100) + '%';
+      status.textContent = `Copied ${done} of ${work.length}`;
     }
   } catch (e){
     state.saving = false;
     openPanel('finish', [
       el('h2', { text: 'Saving stopped' }),
-      el('p', { text: `Something went wrong after ${done} of ${jobs.length} photos: ${e && e.message ? e.message : e}. Photos already copied are safe, and you can press Save again to continue.` }),
+      el('p', { text: `Something went wrong after ${done} of ${work.length} photos: ${e && e.message ? e.message : e}. Photos already copied are safe, and you can press Save again to continue.` }),
       el('div', { class: 'row' },
         el('button', { class: 'btn primary', type: 'button', text: 'Try again', onclick: openFinish }),
         el('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: closePanel })
@@ -1758,7 +1783,7 @@ async function saveAll(){
   const total = state.originalCount || state.items.length;
   const culled = state.originalCount ? state.originalCount - state.items.length : 0;
   const mins = state.startedAt ? Math.max(1, Math.round((Date.now() - state.startedAt) / 60000)) : 0;
-  const summary = `${total} ${unitWord(total)} in, ${jobs.length} kept, ${tl.reject + culled} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
+  const summary = `${total} ${unitWord(total)} in, ${jobs.length} kept, ${tl.reject + culled} rejected${tl.edit ? `, ${tl.edit} need post processing` : ''}${starJobs.length ? `, ${starJobs.length} starred` : ''}${mins ? `. About ${mins} minute${mins === 1 ? '' : 's'}.` : '.'}`;
   openPanel('done', [
     el('h2', { text: 'Saved' }),
     el('p', { class: 'summary', text: summary }),
@@ -1887,6 +1912,7 @@ function bindSortControls(){
     else if (e.key === '+' || e.key === '='){ e.preventDefault(); stepZoom(1); }
     else if (e.key === '-' || e.key === '_'){ e.preventDefault(); stepZoom(-1); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
+    else if ((e.key === 'f' || e.key === 'F') && !e.repeat){ e.preventDefault(); toggleStar(); }
     else if (e.key === '?'){ e.preventDefault(); openHelp(); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }
     else if (e.key === 'ArrowUp' || k === 'w'){ e.preventDefault(); if (!e.repeat) decide('keep', true); }
