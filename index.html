@@ -281,6 +281,21 @@ const PRESETS = {
   sports: 'Volleyball, Soccer, Cross country, Basketball',
   none: ''
 };
+// IMS 2026-27 seasons (first practice to last game, from calendar.html). Pass 2 starts with the sports in season today.
+const SEASONS = [
+  ['Volleyball', '2026-09-08', '2026-10-29'],
+  ['Soccer', '2026-09-08', '2026-10-29'],
+  ['Cross country', '2026-09-08', '2026-10-29'],
+  ['Wrestling', '2026-11-02', '2027-01-19'],
+  ['Girls basketball', '2026-11-02', '2027-01-19'],
+  ['Boys basketball', '2027-01-26', '2027-03-30'],
+  ['Track', '2027-04-05', '2027-06-03']
+];
+function inSeason(){
+  const t = new URLSearchParams(location.search).get('today');
+  const d = t || (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); })();
+  return SEASONS.filter(x => d >= x[1] && d <= x[2]).map(x => x[0]).join(', ');
+}
 const MAX_TAGS = 8;
 const EDIT_FOLDER = 'Needs post processing';
 const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th grade and flag for editing
@@ -1422,7 +1437,9 @@ function openRound2(auto){
   const left = state.decisions.filter(d => { const b = baseCode(d); return b && b !== 'reject'; }).length;
   const input = el('input', { type: 'text', id: 'round2Tags', autocomplete: 'off', placeholder: 'For example: Volleyball, Soccer, Cross country' });
   const last = readJSON(PASS2_KEY);
-  input.value = typeof last === 'string' && last.trim() ? last : PRESETS.sports;
+  const lastText = typeof last === 'string' && last.trim() ? last : '';
+  const seasonText = inSeason();
+  input.value = seasonText || lastText || PRESETS.sports;
   const start = () => {
     const tags = parseTags(input.value);
     if (!tags.length){ input.focus(); return; }
@@ -1438,6 +1455,7 @@ function openRound2(auto){
     el('label', { for: 'round2Tags', text: auto ? 'Categories for pass 2, separated by commas (up to 8)' : 'Categories, separated by commas (up to 8)' }),
     input,
     el('div', { class: 'presets' }, 'Quick fill: ',
+      lastText && lastText !== input.value ? el('button', { class: 'btn ghost', type: 'button', text: 'Last time', onclick: () => { input.value = lastText; input.focus(); } }) : null,
       el('button', { class: 'btn ghost', type: 'button', text: 'Sports', onclick: () => { input.value = PRESETS.sports; input.focus(); } }),
       el('button', { class: 'btn ghost', type: 'button', text: 'Grades', onclick: () => { input.value = PRESETS.grades; input.focus(); } })),
     el('div', { class: 'row' },

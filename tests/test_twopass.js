@@ -3,9 +3,9 @@ const { JSDOM } = require('jsdom');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
 const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; console.log('FAIL', l, x === undefined ? '' : x); } };
-async function load(){
+async function load(today){
   const dom = await JSDOM.fromFile(require('path').join(__dirname,'..','index.html'), {
-    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
+    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/?today=' + (today || '2026-10-01'),
     beforeParse(win){
       win.URL.createObjectURL = () => 'blob:x'; win.URL.revokeObjectURL = () => {}; win.matchMedia = () => ({ matches: true });
       const nf = () => new win.DOMException('nope','NotFoundError');
@@ -35,7 +35,7 @@ async function load(){
   key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowRight'); key('ArrowLeft'); await sleep(40);
   check('pass 1 ends with the pass 2 offer', /Pass 1 done/.test($('sheet').textContent) && /4 of 5 photos are left/.test($('sheet').textContent), $('sheet').textContent.slice(0, 120));
   check('pass 2 offer asks for categories', !!$('round2Tags'));
-  check('pass 2 offer is already filled in the first time', $('round2Tags').value === 'Volleyball, Soccer, Cross country, Basketball', $('round2Tags').value);
+  check('pass 2 offer starts with the sports in season (Oct 1)', $('round2Tags').value === 'Volleyball, Soccer, Cross country', $('round2Tags').value);
   $('round2Tags').value = '';
   btn(/Start pass 2/).click(); await sleep(20);
   check('pass 2 will not start without categories', /Pass 1 done/.test($('sheet').textContent));
@@ -54,6 +54,14 @@ async function load(){
   check('Volleyball has c', names(out && out.kids.get('Volleyball')) === 'c.jpg');
   check('plain keep has b', names(out && out.kids.get('Keep')) === 'b.jpg');
   check('summary counts both passes', /5 photos in, 3 kept, 2 rejected/.test($('sheet').textContent), $('sheet').textContent);
+
+  // the offer follows the date
+  for (const [day, want] of [['2026-11-10', 'Wrestling, Girls basketball'], ['2026-07-01', 'Volleyball, Soccer, Cross country, Basketball']]){
+    ({ $, key, btn, dest, add } = await load(day));
+    await add(['a','b']);
+    key('ArrowRight'); key('ArrowRight'); await sleep(40);
+    check('pass 2 offer for ' + day, $('round2Tags') && $('round2Tags').value === want, $('round2Tags') && $('round2Tags').value);
+  }
 
   // skip pass 2
   ({ $, key, btn, dest, add } = await load());
