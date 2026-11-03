@@ -209,8 +209,8 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <div class="field">
       <label for="sortInput">Show the photos in this order</label>
       <select id="sortInput">
-        <option value="time">When they were taken (file date)</option>
         <option value="name">File name</option>
+        <option value="time">When they were taken (file date)</option>
       </select>
     </div>
 
@@ -325,7 +325,7 @@ const state = {
   folderName: '',
   eventName: '',
   tags: [],         // buttons for tagging: { code, label, folder }
-  sortBy: 'time',   // time | name
+  sortBy: 'name',   // name | time
   items: [],        // { key, name, size, mtime, handle }
   decisions: [],    // null | 'keep' | 'reject' | a tag code (like 'g6' or 't:Soccer'), plus '+edit' on a keep or tag; one per photo
   index: 0,

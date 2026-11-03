@@ -37,7 +37,7 @@ const eq = (a, b) => a.length === b.length && Buffer.compare(Buffer.from(a), Buf
 
   const dest = win.dh('Out');
   win.showDirectoryPicker = async () => dest;
-  await sleep(30);
+  await sleep(30); win.document.getElementById('sortInput').value = 'time';
 
   // ---- a zip with JPGs (deflate + stored), RAW pairs, junk, webp
   drop([win.fh('shoot.zip', fx('shoot.zip'), 5)]);

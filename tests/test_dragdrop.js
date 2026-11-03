@@ -46,7 +46,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
     win.dispatchEvent(ev);
   };
 
-  await sleep(30);
+  await sleep(30); win.document.getElementById('sortInput').value = 'time';
   check('start screen with dropzone', !$('start').hidden && !!$('drop'));
 
   // drag over highlights the dropzone
@@ -84,7 +84,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   key('ArrowLeft');                                     // B/0002 reject (t=4000)
   await sleep(10);
   key('ArrowRight');                                    // Loose keep (t=appended)
-  await sleep(30);
+  await sleep(30); win.document.getElementById('sortInput').value = 'time';
   check('finish panel at end', !$('panel').hidden && /All photos sorted/.test($('sheet').textContent), $('sheet').textContent.slice(0, 60));
 
   // rename the output folder

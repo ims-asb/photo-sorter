@@ -22,7 +22,7 @@ async function boot(){
   win = await boot(); doc = win.document; $ = id => doc.getElementById(id);
   const files2 = [new win.File(['1'], 'b.jpg', { lastModified: 1 }), new win.File(['2'], 'a.jpg', { lastModified: 2 })];
   Object.defineProperty($('fileInput'), 'files', { value: files2, configurable: true });
-  $('fileInput').dispatchEvent(new win.Event('change'));
+  $('sortInput').value = 'time'; $('fileInput').dispatchEvent(new win.Event('change'));
   await sleep(150);
   check('sort by time starts with the earliest (b.jpg)', /b\.jpg/.test($('fname').textContent), $('fname').textContent);
   console.log(failures ? failures + ' FAILED' : 'ALL PASSED');
