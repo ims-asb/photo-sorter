@@ -68,6 +68,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 #hints kbd{font:inherit;font-size:.78rem;padding:.05rem .4rem;border-radius:5px;background:var(--line);color:var(--text);margin-right:.25rem}
 #starBtn{position:absolute;left:1.25rem;bottom:.35rem;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.55);color:var(--muted);font-size:1.3rem;line-height:1;cursor:pointer;padding:0}
 #starBtn.on{color:var(--grade);border-color:var(--grade)}
+#renamedTag{position:absolute;left:3.6rem;bottom:2.4rem;max-width:65%;padding:.15rem .6rem;border-radius:6px;background:var(--edit);color:var(--ink);font-weight:700;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
 #zoomBadge{position:absolute;right:1.25rem;bottom:.7rem;padding:.15rem .6rem;border-radius:6px;background:rgba(0,0,0,.6);color:var(--text);font-size:.85rem;font-variant-numeric:tabular-nums;pointer-events:none}
 #groupBadge{position:absolute;left:50%;transform:translateX(-50%);top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--edit);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none;white-space:nowrap}
 #softBadge{position:absolute;left:1.25rem;top:.7rem;padding:.2rem .65rem;border-radius:6px;background:var(--grade);color:var(--ink);font-weight:700;font-size:.85rem;pointer-events:none}
@@ -238,6 +239,7 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
     <img id="photo" alt="">
     <video id="clip" playsinline loop muted controls hidden></video>
     <button id="starBtn" type="button" title="Star this one (F)" aria-label="Star this one">☆</button>
+    <div id="renamedTag" hidden></div>
     <div id="fname"></div>
     <div id="zoomBadge" hidden></div>
     <div id="softBadge" hidden>Looks soft</div>
@@ -302,8 +304,11 @@ function inSeason(){
 const MAX_TAGS = 8;
 const EDIT_FOLDER = 'Needs post processing';
 const STAR_FOLDER = 'Starred';          // starred keepers are also copied here
+const NAMES_KEY = 'photosorter:v1:names';   // photo key -> the name you typed with R
 const STARS_KEY = 'photosorter:v1:stars';
 const stars = readJSON(STARS_KEY) || {};   // photo key -> true
+const customNames = readJSON(NAMES_KEY) || {};
+let lastRename = '';
 const EDIT_SUFFIX = '+edit';   // a decision like 'g6+edit' means keep as 6th grade and flag for editing
 const baseCode = d => d ? d.split('+')[0] : d;
 const isEdit = d => !!d && d.endsWith(EDIT_SUFFIX);
@@ -409,7 +414,7 @@ function hintItems(){
   const vids = state.items.filter(i => i.video).length;
   if (vids) items.push(['Space', 'Play or pause'], ['M', 'Sound on or off']);
   if (vids < state.items.length) items.push(['Z', 'Zoom'], ['+ -', 'Zoom more or less']);
-  items.push(['F', 'Star it (also copied to a Starred folder)'], ['G', 'Go to ' + unitWord(1)], ['Ctrl+Z or S', 'Undo']);
+  items.push(['R', 'Rename it'], ['F', 'Star it (also copied to a Starred folder)'], ['G', 'Go to ' + unitWord(1)], ['Ctrl+Z or S', 'Undo']);
   return items;
 }
 function buildHints(){
@@ -1401,11 +1406,43 @@ function render(){
 
 function updateStar(){
   const atEnd = state.index >= state.items.length;
+  const nn = !atEnd && customNames[state.items[state.index].key];
+  $('renamedTag').hidden = !nn;
+  if (nn) $('renamedTag').textContent = 'Saves as: ' + nn;
   const on = !atEnd && !!stars[state.items[state.index].key];
   $('starBtn').hidden = atEnd;
   $('starBtn').classList.toggle('on', on);
   $('starBtn').textContent = on ? '★' : '☆';
 }
+function openRename(){
+  if (state.mode !== 'sort' || state.saving || state.index >= state.items.length) return;
+  const it = state.items[state.index];
+  const dot = it.name.lastIndexOf('.');
+  const input = el('input', { type: 'text', id: 'renameInput', autocomplete: 'off', value: customNames[it.key] || lastRename || (dot > 0 ? it.name.slice(0, dot) : it.name) });
+  const submit = () => {
+    const v = safeName(input.value);
+    if (v) { customNames[it.key] = v; lastRename = v; } else delete customNames[it.key];
+    writeJSON(NAMES_KEY, customNames);
+    closePanel();
+    updateStar();
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); submit(); }
+    else if (e.key === 'Escape'){ e.preventDefault(); closePanel(); }
+  });
+  openPanel('rename', [
+    el('h2', { text: 'Rename this ' + unitWord(1) }),
+    el('label', { for: 'renameInput', text: 'New name (the ending like .jpg is added for you). Leave it empty to keep the old name.' }),
+    input,
+    el('p', { class: 'small', text: 'Original: ' + it.name }),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: 'Save name', onclick: submit }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: closePanel })
+    )
+  ]);
+  input.focus(); input.select();
+}
+
 function toggleStar(){
   if (state.index >= state.items.length) return;
   const k = state.items[state.index].key;
@@ -1700,14 +1737,21 @@ async function uniqueName(dir, name){
   throw new Error('Too many files with the same name');
 }
 
+let savedThisRun = new WeakMap();   // folder -> names written during the current save
 async function copyOne(item, dir){
   const out = await exportBlob(item);
   let name = out.name;
+  const custom = customNames[item.key];
+  if (custom){ const dot = name.lastIndexOf('.'); name = custom + (dot > 0 ? name.slice(dot) : ''); }
+  // two photos given the same typed name in one save are different photos, so the second gets a number
+  let used = savedThisRun.get(dir);
+  if (!used){ used = new Set(); savedThisRun.set(dir, used); }
   const size = await exists(dir, name);
   if (size !== null){
-    if (size === out.blob.size) return 'already';
+    if (size === out.blob.size && !used.has(name)) return 'already';
     name = await uniqueName(dir, name);
   }
+  used.add(name);
   const fh = await dir.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
   try { await w.write(out.blob); } finally { await w.close(); }
@@ -1732,6 +1776,7 @@ async function saveAll(){
     }
   }
 
+  savedThisRun = new WeakMap();
   state.saving = true;
   const bar = el('div');
   const status = el('p', { text: 'Starting…' });
@@ -1924,6 +1969,7 @@ function bindSortControls(){
     else if (e.key === '+' || e.key === '='){ e.preventDefault(); stepZoom(1); }
     else if (e.key === '-' || e.key === '_'){ e.preventDefault(); stepZoom(-1); }
     else if (e.key === 'Escape' && zoomed){ setZoom(false); }
+    else if (k === 'r' && !e.repeat){ e.preventDefault(); openRename(); }
     else if ((e.key === 'f' || e.key === 'F') && !e.repeat){ e.preventDefault(); toggleStar(); }
     else if (e.key === '?'){ e.preventDefault(); openHelp(); }
     else if ((e.key === 'g' || e.key === 'G') && !e.repeat){ e.preventDefault(); openGoTo(); }

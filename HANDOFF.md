@@ -185,3 +185,6 @@ The file name under the photo is now larger and bright, with a round star button
 Nov 2: "Start over" on the "Pick up where you left off?" panel now asks first ("Start over?" with "No, keep my choices" and "Yes, start over"), because pressing it by mistake wiped a day of keep and reject choices. Saved folders were never touched. Test: test_dragdrop.js.
 
 Nov 3: the photos now start in file name order (the "Show the photos in this order" box defaults to File name). A choice saved earlier in a browser still wins. Tests that relied on file date order now set it to time first.
+
+## 29. Quick rename with R (Nov 5)
+R opens a small box to name the current photo (the box starts with the last name typed, so a batch of candids is a quick edit). Enter saves and stays on the photo; an empty box clears the name; a blue "Saves as: ..." tag shows it. The ending (.jpg etc.) is added at save. Names are remembered per photo key in localStorage `photosorter:v1:names`. If two photos get the same name in one save, the second becomes "name (2).jpg" (copyOne tracks names written this run in `savedThisRun`). The format of names was not specified by Luke, so there is no number counter or template yet. Test: tests/test_rename.js. Note: jsdom was reinstalled outside the repo for this run, and tests/fx has to be rebuilt with make_fixtures.py after an environment reset.
