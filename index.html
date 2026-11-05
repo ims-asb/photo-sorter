@@ -133,6 +133,8 @@ details.more summary{cursor:pointer;color:var(--muted);margin-bottom:.9rem}
 .sheet label{color:var(--muted);font-size:.9rem}
 
 /* panels */
+#panel.dock{background:transparent;place-items:end center;pointer-events:none}
+#panel.dock .sheet{pointer-events:auto;box-shadow:0 8px 30px rgba(0,0,0,.6)}
 #panel{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:1rem}
 .sheet{width:min(30rem,100%);max-height:100%;overflow:auto;background:var(--bar);border:1px solid var(--line);border-radius:14px;padding:1.5rem}
 .sheet h2{margin:0 0 .6rem;font-size:1.4rem}
@@ -1414,6 +1416,59 @@ function updateStar(){
   $('starBtn').classList.toggle('on', on);
   $('starBtn').textContent = on ? '★' : '☆';
 }
+/* Name the candids: a step for the photos filed under a "... candids" category, one at a time. */
+function candidIndexes(){
+  const out = [];
+  state.decisions.forEach((d, i) => {
+    const b = baseCode(d);
+    if (!b || b === 'reject') return;
+    const tag = state.tags.find(g => g.code === b);
+    if (tag && /candids?$/i.test(tag.folder)) out.push(i);
+  });
+  return out;
+}
+function startNaming(){
+  const queue = candidIndexes();
+  if (!queue.length) return;
+  nameStep(queue, 0, state.index);
+}
+function nameStep(queue, p, back){
+  if (p >= queue.length){
+    state.index = back;
+    render();
+    openFinish();
+    return;
+  }
+  const i = queue[p], it = state.items[i];
+  state.index = i;
+  render();
+  const dot = it.name.lastIndexOf('.');
+  const input = el('input', { type: 'text', id: 'nameCandidInput', autocomplete: 'off', value: customNames[it.key] || lastRename || (dot > 0 ? it.name.slice(0, dot) : it.name) });
+  const save = () => {
+    const v = safeName(input.value);
+    if (v){ customNames[it.key] = v; lastRename = v; } else delete customNames[it.key];
+    writeJSON(NAMES_KEY, customNames);
+  };
+  const next = () => { save(); nameStep(queue, p + 1, back); };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); next(); }
+    else if (e.key === 'Escape'){ e.preventDefault(); nameStep(queue, queue.length, back); }
+  });
+  openPanel('naming', [
+    el('h2', { text: `Name this candid (${p + 1} of ${queue.length})` }),
+    el('label', { for: 'nameCandidInput', text: 'Press Enter for the next one. The name starts as the last one you typed. Empty keeps the old name.' }),
+    input,
+    el('div', { class: 'row' },
+      el('button', { class: 'btn primary', type: 'button', text: p + 1 < queue.length ? 'Save and next' : 'Save and finish', onclick: next }),
+      p > 0 ? el('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => { save(); nameStep(queue, p - 1, back); } }) : null,
+      el('button', { class: 'btn ghost', type: 'button', text: 'Skip', onclick: () => nameStep(queue, p + 1, back) }),
+      el('button', { class: 'btn ghost', type: 'button', text: 'Done', onclick: () => { save(); nameStep(queue, queue.length, back); } })
+    )
+  ]);
+  $('panel').classList.add('dock');
+  input.focus(); input.select();
+}
+
 function openRename(){
   if (state.mode !== 'sort' || state.saving || state.index >= state.items.length) return;
   const it = state.items[state.index];
@@ -1642,6 +1697,7 @@ function flyOff(code){
 /* ---------- panels ---------- */
 
 function openPanel(kind, nodes){
+  $('panel').classList.remove('dock');
   state.panelKind = kind;
   state.mode = 'panel';
   const sheet = $('sheet');
@@ -1704,6 +1760,7 @@ function openFinish(){
     el('p', { class: 'small', text: 'Everything is saved as JPG or PNG. CR2 files are saved as JPGs from the preview built into them.' }),
     el('p', { class: 'small', text: 'Saving again only adds photos. If you changed your mind about photos you already saved, delete the sorted folder first.' }),
     el('div', { class: 'row' },
+      candidIndexes().length ? el('button', { class: 'btn ghost', type: 'button', text: `Name the candids (${candidIndexes().length})`, onclick: startNaming }) : null,
       el('button', { class: 'btn primary', type: 'button', text: `Save sorted ${unitWord(2)}`, disabled: toCopy === 0 ? 'disabled' : null, onclick: saveAll }),
       state.round === 1 && !state.tags.length && toCopy > 0
         ? el('button', { class: 'btn ghost', type: 'button', text: 'Next: sort the kept photos into categories', onclick: openRound2 }) : null,
