@@ -32,14 +32,19 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 <body>
 <main>
 <h1>Yearbook Layout Planner</h1>
-<p class="sub">Back to school: a big photo, two tall photos, and a real filmstrip. Pick a strip that winds across the spread, wraps around in an O, or runs straight. Runs only on this computer. No photos needed.</p>
+<p class="sub">Back to school: a big photo, two tall photos, and a real filmstrip. Pick a table covered in Polaroids, a strip that winds across the spread, a strip that wraps in an O, or a straight strip. Runs only on this computer. No photos needed.</p>
 
 <div class="bar">
   <label>Page width (in)<input id="pw" type="number" step="0.125" value="8.5" min="4" max="14"></label>
   <label>Page height (in)<input id="ph" type="number" step="0.125" value="11" min="4" max="17"></label>
   <label>Safe margin (in)<input id="safe" type="number" step="0.0625" value="0.375" min="0.1" max="1"></label>
   <label>Keep clear at the fold (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0.1" max="1.5"></label>
-  <label>Filmstrip<select id="mode" style="width:190px"><option value="wind" selected>Winds across the spread</option><option value="wrap">Wraps around in an O</option><option value="straight">Straight, along the bottom</option></select></label>
+  <label>Filmstrip<select id="mode" style="width:190px"><option value="table" selected>A table full of Polaroids</option><option value="wind">Winds across the spread</option><option value="wrap">Wraps around in an O</option><option value="straight">Straight, along the bottom</option></select></label>
+  <label data-m="table">Prints<input id="tn" type="number" min="4" max="30" value="14"></label>
+  <label data-m="table">Film<select id="tf" style="width:150px"><option value="square">Instax square</option><option value="mini">Instax mini</option><option value="classic">Polaroid classic</option></select></label>
+  <label data-m="table">Tilt (degrees)<input id="tt" type="number" min="0" max="25" value="8"></label>
+  <label data-m="table">Overlap<select id="to"><option value="0">None</option><option value="0.2" selected>Some</option><option value="0.4">Lots</option></select></label>
+  <button data-m="table" id="shuffle" type="button">Shuffle</button>
   <label data-m="wind">Frames on the strip<select id="nw"><option>0</option><option>2</option><option>4</option><option selected>6</option><option>8</option><option>10</option></select></label>
   <label data-m="straight">Frames per page<select id="nf"><option>3</option><option selected>4</option><option>5</option></select></label>
   <label data-m="wrap">Bottom frames per page<select id="nb"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option></select></label>
@@ -104,7 +109,112 @@ th{color:var(--muted);font-weight:600;font-size:12px}
   }
   const rr = (x, y, w, h, r) => `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
 
+
+  /* ---------- A table full of Polaroids ---------- */
+  const FILMS = {   // print size and photo window, in mm
+    square: { w: 72, h: 86, ww: 62, wh: 62, side: 5, top: 5, name: 'Instax square' },
+    mini: { w: 54, h: 86, ww: 46, wh: 62, side: 4, top: 5, name: 'Instax mini' },
+    classic: { w: 88, h: 107, ww: 79, wh: 79, side: 4.5, top: 6, name: 'Polaroid classic' }
+  };
+  let seed = 1;
+  function rng(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  // how much of print i's photo window is not covered by prints drawn after it (sampled on a 9 x 9 grid)
+  function visible(out, i){
+    const b = out[i]; let seen = 0, total = 0;
+    for (let u = 0; u < 9; u++) for (let v = 0; v < 9; v++){
+      const lx = b.wx + (u + 0.5) / 9 * b.ww - b.pw / 2, ly = b.wy + (v + 0.5) / 9 * b.wh - b.ph / 2, ra = b.a * Math.PI / 180;
+      const px = b.cx + lx * Math.cos(ra) - ly * Math.sin(ra), py = b.cy + lx * Math.sin(ra) + ly * Math.cos(ra);
+      let covered = false;
+      for (let j = i + 1; j < out.length && !covered; j++){
+        const c = out[j], rj = -c.a * Math.PI / 180, dx = px - c.cx, dy = py - c.cy;
+        const qx = dx * Math.cos(rj) - dy * Math.sin(rj), qy = dx * Math.sin(rj) + dy * Math.cos(rj);
+        if (Math.abs(qx) <= c.pw / 2 && Math.abs(qy) <= c.ph / 2) covered = true;
+      }
+      total++; if (!covered) seen++;
+    }
+    return seen / total;
+  }
+  function tableLayout(){
+    const W = +$('pw').value, H = +$('ph').value, safe = +$('safe').value, gut = +$('gut').value;
+    const n = Math.max(4, Math.min(30, +$('tn').value || 14)), tilt = Math.max(0, Math.min(25, +$('tt').value || 0)), ov = +$('to').value;
+    const F = FILMS[$('tf').value];
+    const pages = [[safe, W - gut], [W + gut, 2 * W - safe]];
+    const aw = W - safe - gut, ah = H - 2 * safe;
+    const per = [Math.ceil(n / 2), Math.floor(n / 2)];
+    const gen = f => {
+    const rnd = rng(seed * 7919 + n);
+    const out = [];
+    pages.forEach(([x0], pi) => {
+      const m = per[pi]; if (!m) return;
+      const rows = Math.max(1, Math.round(Math.sqrt(m * ah / aw))), cols = Math.ceil(m / rows);
+      const cw = aw / cols, ch = ah / rows;
+      // print size: fill the cells, bigger with more overlap, never bigger than a cell allows when tilted
+      let ph = Math.min(ch * (0.95 + ov * 0.5), cw * (F.h / F.w) * (0.95 + ov * 0.5)) * f;
+      ph = Math.max(1.4, ph); const pw = ph * F.w / F.h;
+      const cells = [];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([r, c]);
+      for (let i = cells.length - 1; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+      cells.slice(0, m).forEach(([r, c]) => {
+        const a = (rnd() * 2 - 1) * tilt, rad = Math.abs(a) * Math.PI / 180;
+        const bw = pw * Math.cos(rad) + ph * Math.sin(rad), bh = pw * Math.sin(rad) + ph * Math.cos(rad);
+        let cx = x0 + cw * (c + 0.5) + (rnd() - 0.5) * cw * 0.28, cy = safe + ch * (r + 0.5) + (rnd() - 0.5) * ch * 0.28;
+        cx = Math.min(Math.max(cx, x0 + bw / 2), x0 + aw - bw / 2); cy = Math.min(Math.max(cy, safe + bh / 2), safe + ah - bh / 2);
+        const k = ph / F.h;       // inches per mm
+        out.push({ kind: 'print', a: N(a), cx: N(cx), cy: N(cy), pw: N(pw), ph: N(ph), ww: N(F.ww * k), wh: N(F.wh * k), wx: N(F.side * k), wy: N(F.top * k), bb: { x0: cx - bw / 2, y0: cy - bh / 2, x1: cx + bw / 2, y1: cy + bh / 2 }, warm: rnd() < 0.4 });
+      });
+    });
+    // draw order is random, so some prints sit on top of others
+    for (let i = out.length - 1; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    out.forEach((b, i) => { b.id = 'Print ' + (i + 1); });
+    return out;
+    };
+    // shrink the prints until every photo window is at least 60% showing
+    let out, f = 1;
+    for (let tries = 0; tries < 8; tries++, f *= 0.93){
+      out = gen(f);
+      if (Math.min(...out.map((b, i) => visible(out, i))) >= 0.6) break;
+    }
+    return { W, H, safe, gut, mode: 'table', out, film: F, info: { kind: 'table' } };
+  }
+
+  function drawTable(L){
+    const W = L.W, H = L.H, real = $('real').checked, svg = $('svg');
+    svg.setAttribute('viewBox', `0 0 ${2 * W * S} ${H * S}`);
+    const parts = [DEFS];
+    const r = (x, y, w, h, extra) => `<rect x="${x * S}" y="${y * S}" width="${w * S}" height="${h * S}" ${extra || ''}/>`;
+    parts.push(r(0, 0, 2 * W, H, 'fill="#6b4f3a"'));                                  // the table: a wood-brown top
+    if (real) parts.push(r(0, 0, 2 * W, H, 'filter="url(#paper)"'));
+    for (let y = 0.35; y < H; y += 0.6) parts.push(`<path d="M0 ${y * S}C${W * S * 0.6} ${(y + 0.1) * S} ${W * S * 1.4} ${(y - 0.1) * S} ${2 * W * S} ${y * S}" stroke="#5a412f" stroke-width="2" fill="none" opacity=".6"/>`);
+    if (real) parts.push(r(W - 0.7, 0, 1.4, H, 'fill="url(#foldG)"'));
+    for (const b of L.out){
+      const tr = `transform="rotate(${b.a} ${b.cx * S} ${b.cy * S})"`, x = b.cx - b.pw / 2, y = b.cy - b.ph / 2;
+      parts.push(`<g ${tr}>`);
+      parts.push(r(x, y, b.pw, b.ph, `rx="${0.04 * S}" fill="${b.warm ? '#f4ecd9' : '#f6f4ee'}" ${real ? 'filter="url(#shadowSm)"' : ''}`));
+      if (real) parts.push(r(x, y, b.pw, b.ph, `rx="${0.04 * S}" fill="#fff" filter="url(#grain)" opacity=".35"`));
+      parts.push(r(x + b.wx, y + b.wy, b.ww, b.wh, `fill="${real ? 'url(#photoG)' : '#7d93a8'}" stroke="#bdb6a4" stroke-width="2"`));
+      parts.push(`<text x="${(x + b.wx + b.ww / 2) * S}" y="${(y + b.wy + b.wh / 2) * S + 8}" text-anchor="middle" font-size="${Math.max(18, b.ww * S * 0.2)}" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">${b.id.replace('Print ', '')}</text>`);
+      parts.push(`<text x="${(x + b.pw / 2) * S}" y="${(y + b.ph - (b.ph - b.wy - b.wh) / 2) * S + 6}" text-anchor="middle" font-size="${Math.max(14, b.pw * S * 0.1)}" font-family="'Segoe Script','Bradley Hand','Comic Sans MS',cursive" fill="#8a8880">name here</text>`);
+      parts.push('</g>');
+    }
+    if ($('guides').checked){
+      const dash = (c, d) => `fill="none" stroke="${c}" stroke-width="3" stroke-dasharray="${d}"`;
+      parts.push(r(0, 0, 2 * W, H, dash('#e05555', '14 8')));
+      parts.push(r(L.safe, L.safe, W - L.safe - L.gut, H - 2 * L.safe, dash('#3b78e0', '10 8')));
+      parts.push(r(W + L.gut, L.safe, W - L.safe - L.gut, H - 2 * L.safe, dash('#3b78e0', '10 8')));
+      parts.push(`<line x1="${W * S}" x2="${W * S}" y1="0" y2="${H * S}" stroke="#ccc" stroke-width="2"/>`);
+    }
+    svg.innerHTML = parts.join('');
+    boxes = L.out.map(b => ({ id: b.id, kind: 'photo', x: N(b.cx - b.pw / 2 + b.wx), y: N(b.cy - b.ph / 2 + b.wy), w: b.ww, h: b.wh, a: b.a, what: `${L.film.name} print, ${b.pw.toFixed(2)} x ${b.ph.toFixed(2)} in, tilted ${b.a} degrees, centered at ${b.cx.toFixed(2)} across and ${b.cy.toFixed(2)} down. The photo goes in the window.` }));
+    $('count').textContent = `${L.out.length} ${L.film.name} prints, tilted up to ${+$('tt').value} degrees. Later numbers sit on top. Page ${W} x ${H} in.`;
+    $('rows').replaceChildren(...boxes.map(b => {
+      const tr = document.createElement('tr');
+      [b.id, `${b.w.toFixed(2)} x ${b.h.toFixed(2)}`, `${Math.round(b.w * 300)} x ${Math.round(b.h * 300)}`, b.what].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+      return tr;
+    }));
+  }
+
   function layout(){
+    if ($('mode').value === 'table') return tableLayout();
     const mode = $('mode').value;
     const W = +$('pw').value, H = +$('ph').value, safe = +$('safe').value, gut = +$('gut').value;
     const out = [];
@@ -283,6 +393,8 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     const L = layout();
     boxes = L.out; strip = L;
     document.querySelectorAll('[data-m]').forEach(el => { el.style.display = el.dataset.m === L.mode ? '' : 'none'; });
+    $('strip').style.display = L.mode === 'table' ? 'none' : '';
+    if (L.mode === 'table') return drawTable(L);
     const W = L.W, H = L.H, svg = $('svg');
     svg.setAttribute('viewBox', `0 0 ${2 * W * S} ${H * S}`);
     const parts = [];
@@ -352,16 +464,17 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  ['pw', 'ph', 'safe', 'gut', 'mode', 'nf', 'nw', 'nb', 'nt', 'ns', 'guides', 'real'].forEach(id => $(id).addEventListener('input', draw));
+  ['pw', 'ph', 'safe', 'gut', 'mode', 'nf', 'nw', 'nb', 'nt', 'ns', 'guides', 'real', 'tn', 'tf', 'tt', 'to'].forEach(id => $(id).addEventListener('input', draw));
   $('print').addEventListener('click', () => window.print());
   $('strip').addEventListener('click', downloadStrip);
+  $('shuffle').addEventListener('click', () => { seed++; draw(); });
   $('copy').addEventListener('click', async () => {
     const b = $('copy');
     try { await navigator.clipboard.writeText(sizesText()); b.textContent = 'Copied'; }
     catch (e) { b.textContent = 'Could not copy'; }
     setTimeout(() => { b.textContent = 'Copy the sizes'; }, 1500);
   });
-  window.yearbookPlanner = { layout, sizesText };
+  window.yearbookPlanner = { layout, sizesText, visible };
   draw();
 })();
 </script>

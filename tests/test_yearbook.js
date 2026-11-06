@@ -60,7 +60,23 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
       check(`${tag}: frames sit on the strip, not inside it`, onStrip);
     }
   }
-  check('copy text lists the boxes', /Star photo:/.test(win.yearbookPlanner.sizesText()));
+  // the table of Polaroids
+  set('mode', 'table');
+  for (const [n, film, tilt, ov] of [[14, 'square', 8, '0.2'], [10, 'mini', 12, '0'], [20, 'classic', 6, '0.4'], [6, 'square', 0, '0.2']]){
+    set('tn', n); set('tf', film); set('tt', tilt); set('to', ov);
+    const L = win.yearbookPlanner.layout(), { out, W, H, safe, gut } = L, tag = `table ${n} ${film} tilt ${tilt} overlap ${ov}`;
+    check(`${tag}: ${n} prints`, out.length === n, out.length);
+    const eps = 0.002;
+    check(`${tag}: every print is inside the safe area and off the fold`, out.every(b => (b.bb.x1 <= W - gut + eps || b.bb.x0 >= W + gut - eps) && b.bb.x0 >= safe - eps && b.bb.x1 <= 2 * W - safe + eps && b.bb.y0 >= safe - eps && b.bb.y1 <= H - safe + eps));
+    const worst = Math.min(...out.map((b, i) => win.yearbookPlanner.visible(out, i)));
+    check(`${tag}: every photo window is at least 60% showing`, worst >= 0.6, worst);
+    check(`${tag}: tilt stays within the limit`, out.every(b => Math.abs(b.a) <= tilt + 0.001));
+    check(`${tag}: window sits inside the print`, out.every(b => b.wx > 0 && b.wy > 0 && b.wx + b.ww < b.pw && b.wy + b.wh < b.ph));
+  }
+  const first = win.yearbookPlanner.layout().out.map(b => b.cx).join();
+  doc.getElementById('shuffle').click();
+  check('shuffle gives a different arrangement', win.yearbookPlanner.layout().out.map(b => b.cx).join() !== first);
+  check('copy text lists the boxes', /Print 1:/.test(win.yearbookPlanner.sizesText()));
   check('svg drawn', doc.getElementById('svg').querySelectorAll('rect').length > 20);
   console.log(failures ? failures + ' FAILED' : 'ALL PASSED');
   process.exit(failures ? 1 : 0);
