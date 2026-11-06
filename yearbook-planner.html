@@ -149,9 +149,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
       box('Photo 1', 0.10, 0.13, 0.19, 0.29, 'A small photo, top left cluster.');
       box('Photo 2', 0.22, 0.10, 0.35, 0.27, 'A medium photo, top left cluster.');
       box('Photo 3', 0.11, 0.31, 0.25, 0.40, 'A wide, short photo.');
-      box('Photo 4', 0.27, 0.28, 0.38, 0.46, 'A medium photo.');
+      box('Photo 4', 0.265, 0.29, 0.345, 0.395, 'A medium photo.');
       box('Photo 5', 0.18, 0.67, 0.36, 0.80, 'A wide photo, bottom left.');
-      box('Photo 6', 0.54, 0.74, 0.88, 0.87, 'A long wide photo along the bottom. Your best action shot.');
+      box('Photo 6', 0.54, 0.80, 0.88, 0.92, 'A long wide photo along the bottom. Your best action shot.');
       box('Photo 7', 0.64, 0.06, 0.79, 0.26, 'A medium photo, top right.');
       box('Photo 8', 0.70, 0.30, 0.92, 0.70, 'The star photo: the biggest, on the right page. The strip passes behind it.');
       // the strip: a smooth curve through these points (fractions of the spread), left edge to right edge
@@ -209,7 +209,7 @@ th{color:var(--muted);font-weight:600;font-size:12px}
         add('Frame ' + (i + 1), 'frame', f.q.x - fwd / 2, f.q.y - fwd / 2, fwd, fwd, 'Photo on the strip, tilted ' + Math.round(((f.q.ang * 180 / Math.PI) % 360 + 540) % 360 - 180) + ' degrees (frame ' + (i + 1) + ').');
         out[out.length - 1].a = N(f.q.ang * 180 / Math.PI); out[out.length - 1].bb = f.bb;
       });
-      info = { kind: 'wind', poly: left.concat(right), holes };
+      info = { kind: 'wind', poly: left.concat(right), holes, path: path.map(q => ({ x: q.x, y: q.y })), T };
     } else {
       const T = 0.12 * H, band = 0.19, fwd = T - 2 * band;          // ring thickness, sprocket band, frame size
       const Ro = T + 0.25, Ri = 0.25;

@@ -43,6 +43,10 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
       const rect = x => ({ x0: x.x, y0: x.y, x1: x.x + x.w, y1: x.y + x.h });
       check(`${tag}: frames are not over photos or each other`, frames.every((f, i) => !pics.some(q => hit(f.bb, rect(q))) && frames.every((g, j) => i === j || !hit(f.bb, g.bb))));
       check(`${tag}: frames stay off the fold and in the safe area`, frames.every(f => (f.bb.x1 <= W - gut + eps || f.bb.x0 >= W + gut - eps) && f.bb.x0 >= safe - eps && f.bb.x1 <= 2 * W - safe + eps && f.bb.y0 >= safe - eps && f.bb.y1 <= H - safe + eps));
+      const I = win.yearbookPlanner.layout().info;
+      const dist = (b, q) => Math.hypot(Math.max(b.x - q.x, 0, q.x - (b.x + b.w)), Math.max(b.y - q.y, 0, q.y - (b.y + b.h)));
+      const close = pics.filter(b => b.id !== 'Photo 8' && I.path.some(q => dist(b, q) < I.T / 2 + 0.05));
+      check(`${tag}: no photo touches the strip except the star photo`, close.length === 0, close.map(b => b.id));
       if (opts.nw === 6) check(`${tag}: frames are spread out, not bunched at one end`, frames.length === 6 && (frames[5].x - frames[0].x > 3 || Math.abs(frames[5].y - frames[0].y) > 3), frames.map(f => f.x.toFixed(1) + ',' + f.y.toFixed(1)).join(' '));
     }
     if (mode === 'wrap'){
