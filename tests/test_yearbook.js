@@ -8,6 +8,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   const set = (id, v) => { const e = doc.getElementById(id); e.value = String(v); e.dispatchEvent(new win.Event('input')); };
   const cases = [
     ['straight', { nf: 3 }, 9], ['straight', { nf: 4 }, 11], ['straight', { nf: 5 }, 13],
+    ['wind', { nw: 6 }, 14], ['wind', { nw: 0 }, 8], ['wind', { nw: 10 }, 18],
     ['wrap', { nb: 3, nt: 0, ns: 2 }, 13], ['wrap', { nb: 2, nt: 2, ns: 3 }, 17], ['wrap', { nb: 0, nt: 0, ns: 0 }, 3]
   ];
   for (const [mode, opts, photos] of cases){
@@ -29,8 +30,21 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
     }
     check(`${tag}: no boxes overlap`, !overlap);
     const star = out.find(b => b.id === 'Star photo'), tall = out.find(b => b.id === 'Tall photo A');
-    const ratio = (star.w * star.h) / (tall.w * tall.h);
-    check(`${tag}: star photo is 1.8 to 3.2 times a tall photo`, ratio > 1.8 && ratio < 3.2, ratio);
+    if (star){
+      const ratio = (star.w * star.h) / (tall.w * tall.h);
+      check(`${tag}: star photo is 1.8 to 3.2 times a tall photo`, ratio > 1.8 && ratio < 3.2, ratio);
+    } else {
+      const areas = out.filter(x => x.kind === 'photo').map(x => x.w * x.h).sort((a, b) => b - a);
+      check(`${tag}: the biggest photo is clearly the biggest`, areas[0] > 1.5 * areas[1], areas.slice(0, 2));
+    }
+    if (mode === 'wind'){
+      const frames = out.filter(x => x.kind === 'frame'), pics = out.filter(x => x.kind === 'photo');
+      const hit = (a, c) => a.x0 < c.x1 - eps && c.x0 < a.x1 + -eps && a.y0 < c.y1 - eps && c.y0 < a.y1 - eps;
+      const rect = x => ({ x0: x.x, y0: x.y, x1: x.x + x.w, y1: x.y + x.h });
+      check(`${tag}: frames are not over photos or each other`, frames.every((f, i) => !pics.some(q => hit(f.bb, rect(q))) && frames.every((g, j) => i === j || !hit(f.bb, g.bb))));
+      check(`${tag}: frames stay off the fold and in the safe area`, frames.every(f => (f.bb.x1 <= W - gut + eps || f.bb.x0 >= W + gut - eps) && f.bb.x0 >= safe - eps && f.bb.x1 <= 2 * W - safe + eps && f.bb.y0 >= safe - eps && f.bb.y1 <= H - safe + eps));
+      if (opts.nw === 6) check(`${tag}: frames are spread out, not bunched at one end`, frames.length === 6 && (frames[5].x - frames[0].x > 3 || Math.abs(frames[5].y - frames[0].y) > 3), frames.map(f => f.x.toFixed(1) + ',' + f.y.toFixed(1)).join(' '));
+    }
     if (mode === 'wrap'){
       const I = win.yearbookPlanner.layout().info, frames = out.filter(b => b.kind === 'frame');
       const clear = ['Star photo', 'Tall photo A', 'Tall photo B', 'Title', 'Caption', 'Paragraph'].every(id => {

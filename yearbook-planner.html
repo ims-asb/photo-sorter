@@ -32,14 +32,15 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 <body>
 <main>
 <h1>Yearbook Layout Planner</h1>
-<p class="sub">Back to school: a big photo, two tall photos, and a real filmstrip. Pick a straight strip, or a strip that bends around the pages in an O. Runs only on this computer. No photos needed.</p>
+<p class="sub">Back to school: a big photo, two tall photos, and a real filmstrip. Pick a strip that winds across the spread, wraps around in an O, or runs straight. Runs only on this computer. No photos needed.</p>
 
 <div class="bar">
   <label>Page width (in)<input id="pw" type="number" step="0.125" value="8.5" min="4" max="14"></label>
   <label>Page height (in)<input id="ph" type="number" step="0.125" value="11" min="4" max="17"></label>
   <label>Safe margin (in)<input id="safe" type="number" step="0.0625" value="0.375" min="0.1" max="1"></label>
   <label>Keep clear at the fold (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0.1" max="1.5"></label>
-  <label>Filmstrip<select id="mode" style="width:190px"><option value="straight">Straight, along the bottom</option><option value="wrap" selected>Wraps around in an O</option></select></label>
+  <label>Filmstrip<select id="mode" style="width:190px"><option value="wind" selected>Winds across the spread</option><option value="wrap">Wraps around in an O</option><option value="straight">Straight, along the bottom</option></select></label>
+  <label data-m="wind">Frames on the strip<select id="nw"><option>0</option><option>2</option><option>4</option><option selected>6</option><option>8</option><option>10</option></select></label>
   <label data-m="straight">Frames per page<select id="nf"><option>3</option><option selected>4</option><option>5</option></select></label>
   <label data-m="wrap">Bottom frames per page<select id="nb"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option></select></label>
   <label data-m="wrap">Top frames per page<select id="nt"><option selected>0</option><option>1</option><option>2</option><option>3</option></select></label>
@@ -133,6 +134,82 @@ th{color:var(--muted);font-weight:600;font-size:12px}
       info = { kind: 'straight', rect: { x: 0, y: stripY, w: 2 * W, h: stripH }, band: band, holes: [
         ...[0, 1].flatMap(row => { const hs = []; for (let x = 0.12; x < 2 * W - 0.1; x += 0.33) hs.push({ x: x + 0.08, y: row ? stripY + stripH - band / 2 : stripY + band / 2, a: 0 }); return hs; })
       ] };
+    } else if (mode === 'wind'){
+      const sw = 2 * W, pad = safe;
+      const T = 0.1 * H, band = 0.15, fwd = T - 2 * band;
+      const box = (id, x0, y0, x1, y1, what) => {
+        const x = Math.max(pad, Math.min(sw - pad, x0 * sw)), y = Math.max(pad, y0 * H);
+        let xe = Math.min(sw - pad, x1 * sw), ye = Math.min(H - pad, y1 * H);
+        // keep each photo off the fold
+        const fl = W - gut, fr = W + gut;
+        if (x < W && xe > fl) xe = fl;
+        if (x >= W && x < fr) return;
+        add(id, 'photo', x, y, xe - x, ye - y, what);
+      };
+      box('Photo 1', 0.10, 0.13, 0.19, 0.29, 'A small photo, top left cluster.');
+      box('Photo 2', 0.22, 0.10, 0.35, 0.27, 'A medium photo, top left cluster.');
+      box('Photo 3', 0.11, 0.31, 0.25, 0.40, 'A wide, short photo.');
+      box('Photo 4', 0.27, 0.28, 0.38, 0.46, 'A medium photo.');
+      box('Photo 5', 0.18, 0.67, 0.36, 0.80, 'A wide photo, bottom left.');
+      box('Photo 6', 0.54, 0.74, 0.88, 0.87, 'A long wide photo along the bottom. Your best action shot.');
+      box('Photo 7', 0.64, 0.06, 0.79, 0.26, 'A medium photo, top right.');
+      box('Photo 8', 0.70, 0.30, 0.92, 0.70, 'The star photo: the biggest, on the right page. The strip passes behind it.');
+      // the strip: a smooth curve through these points (fractions of the spread), left edge to right edge
+      const ctl = [[-0.03, 0.60], [0.15, 0.60], [0.30, 0.55], [0.41, 0.38], [0.46, 0.20], [0.55, 0.17], [0.60, 0.30], [0.54, 0.45], [0.51, 0.60], [0.55, 0.70], [0.64, 0.65], [0.72, 0.50], [0.85, 0.36], [1.03, 0.30]].map(q => ({ x: q[0] * sw, y: q[1] * H }));
+      const cr = (p0, p1, p2, p3, t) => ({
+        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t * t + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t * t * t),
+        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t * t + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t * t * t)
+      });
+      const path = [];
+      for (let i = 0; i < ctl.length - 1; i++){
+        const p0 = ctl[Math.max(0, i - 1)], p1 = ctl[i], p2 = ctl[i + 1], p3 = ctl[Math.min(ctl.length - 1, i + 2)];
+        for (let k = 0; k < 40; k++) path.push(cr(p0, p1, p2, p3, k / 40));
+      }
+      path.push(ctl[ctl.length - 1]);
+      let len = 0;
+      path.forEach((q, i) => { if (i){ len += Math.hypot(q.x - path[i - 1].x, q.y - path[i - 1].y); } q.d = len; });
+      path.forEach((q, i) => {
+        const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        q.ang = ang; q.nx = -Math.sin(ang); q.ny = Math.cos(ang);
+      });
+      const left = path.map(q => ({ x: q.x + q.nx * T / 2, y: q.y + q.ny * T / 2 }));
+      const right = path.map(q => ({ x: q.x - q.nx * T / 2, y: q.y - q.ny * T / 2 })).reverse();
+      const holes = [];
+      for (let d = 0.1; d < len; d += 0.33){
+        let i = path.findIndex(q => q.d >= d); if (i < 0) break;
+        const q = path[i], off = T / 2 - band / 2;
+        holes.push({ x: q.x + q.nx * off, y: q.y + q.ny * off, a: q.ang * 180 / Math.PI });
+        holes.push({ x: q.x - q.nx * off, y: q.y - q.ny * off, a: q.ang * 180 / Math.PI });
+      }
+      // frames sit on the strip, tilted with it, never at the fold, never over a photo or each other
+      const photosNow = out.filter(b => b.kind === 'photo');
+      const bbOf = (q, w, h) => {
+        const c = Math.abs(Math.cos(q.ang)), sn = Math.abs(Math.sin(q.ang));
+        const hw = (w * c + h * sn) / 2, hh = (w * sn + h * c) / 2;
+        return { x0: q.x - hw, y0: q.y - hh, x1: q.x + hw, y1: q.y + hh };
+      };
+      const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+      const want = +$('nw').value, fits = [], spacing = fwd + 0.18;
+      let last = -1e9;
+      for (const q of path){               // every spot along the strip where a frame fits
+        if (q.d < 0.4 || q.d > len - 0.4 || q.d - last < spacing) continue;
+        const bb = bbOf(q, fwd, fwd);
+        const onPage = bb.x0 >= (q.x < W ? safe : W + gut) && bb.x1 <= (q.x < W ? W - gut : sw - safe) && bb.y0 >= safe && bb.y1 <= H - safe;
+        if (!onPage) continue;
+        if (photosNow.some(b => hit(bb, { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h }))) continue;
+        if (fits.some(f => hit(bb, f.bb))) continue;
+        fits.push({ q, bb }); last = q.d;
+      }
+      // use `want` of them, spread out along the strip
+      const placed = [];
+      const k = Math.min(want, fits.length);
+      for (let i = 0; i < k; i++) placed.push(fits[k === 1 ? 0 : Math.round(i * (fits.length - 1) / (k - 1))]);
+      placed.forEach((f, i) => {
+        add('Frame ' + (i + 1), 'frame', f.q.x - fwd / 2, f.q.y - fwd / 2, fwd, fwd, 'Photo on the strip, tilted ' + Math.round(((f.q.ang * 180 / Math.PI) % 360 + 540) % 360 - 180) + ' degrees (frame ' + (i + 1) + ').');
+        out[out.length - 1].a = N(f.q.ang * 180 / Math.PI); out[out.length - 1].bb = f.bb;
+      });
+      info = { kind: 'wind', poly: left.concat(right), holes };
     } else {
       const T = 0.12 * H, band = 0.19, fwd = T - 2 * band;          // ring thickness, sprocket band, frame size
       const Ro = T + 0.25, Ri = 0.25;
@@ -177,7 +254,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
   function stripMarkup(L){
     const I = L.info, hw = 0.16, hh = 0.1;
     const holes = I.holes.map(p => `<rect x="${(p.x - hw / 2) * S}" y="${(p.y - hh / 2) * S}" width="${hw * S}" height="${hh * S}" rx="14" fill="#000" transform="rotate(${p.a} ${p.x * S} ${p.y * S})"/>`).join('');
-    const shape = I.kind === 'straight'
+    const shape = I.kind === 'wind'
+      ? `<path fill="${FILM}" mask="url(#holes)" d="M${I.poly.map(p => (p.x * S).toFixed(1) + ' ' + (p.y * S).toFixed(1)).join('L')}Z"/>`
+      : I.kind === 'straight'
       ? `<rect x="${I.rect.x * S}" y="${I.rect.y * S}" width="${I.rect.w * S}" height="${I.rect.h * S}" fill="${FILM}" mask="url(#holes)"/>`
       : `<path fill-rule="evenodd" fill="${FILM}" mask="url(#holes)" d="${rr(I.outer.x * S, I.outer.y * S, I.outer.w * S, I.outer.h * S, I.outer.r * S)}${rr(I.inner.x * S, I.inner.y * S, I.inner.w * S, I.inner.h * S, I.inner.r * S)}"/>`;
     return `<mask id="holes" maskUnits="userSpaceOnUse" x="0" y="0" width="${2 * L.W * S}" height="${L.H * S}"><rect width="${2 * L.W * S}" height="${L.H * S}" fill="#fff"/>${holes}</mask>${shape}`;
@@ -196,7 +275,8 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     parts.push(stripMarkup(L));
     for (const b of boxes){
       const photo = b.kind === 'photo', frame = b.kind === 'frame';
-      parts.push(r(b.x, b.y, b.w, b.h, `fill="${photo ? '#7d93a8' : frame ? '#8fa3b5' : '#f6f2e7'}" stroke="${photo || frame ? 'none' : '#9a937f'}" stroke-width="2" ${photo || frame ? '' : 'stroke-dasharray="8 6"'}`));
+      const rot = b.a ? `transform="rotate(${b.a} ${(b.x + b.w / 2) * S} ${(b.y + b.h / 2) * S})"` : '';
+      parts.push(r(b.x, b.y, b.w, b.h, `fill="${photo ? '#7d93a8' : frame ? '#8fa3b5' : '#f6f2e7'}" stroke="${photo || frame ? 'none' : '#9a937f'}" stroke-width="2" ${photo || frame ? '' : 'stroke-dasharray="8 6"'} ${rot}`));
       const cx = (b.x + b.w / 2) * S, cy = (b.y + b.h / 2) * S;
       if (frame){
         parts.push(`<text x="${cx}" y="${cy + 10}" text-anchor="middle" font-size="30" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">${b.id.replace('Frame ', '')}</text>`);
@@ -216,7 +296,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     svg.innerHTML = parts.join('');
 
     const frames = boxes.filter(b => b.kind === 'frame').length, photos = boxes.filter(b => b.kind !== 'text').length;
-    $('count').textContent = `${photos} photos: 1 star, 2 tall, and ${frames} filmstrip frames. Page ${W} x ${H} in.`;
+    $('count').textContent = L.mode === 'wind'
+      ? `${photos} photos: ${photos - frames} around the strip and ${frames} on it. Page ${W} x ${H} in.`
+      : `${photos} photos: 1 star, 2 tall, and ${frames} filmstrip frames. Page ${W} x ${H} in.`;
     $('rows').replaceChildren(...boxes.map(b => {
       const tr = document.createElement('tr');
       const px = b.kind === 'text' ? '' : `${Math.round(b.w * 300)} x ${Math.round(b.h * 300)}`;
@@ -246,7 +328,7 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  ['pw', 'ph', 'safe', 'gut', 'mode', 'nf', 'nb', 'nt', 'ns', 'guides'].forEach(id => $(id).addEventListener('input', draw));
+  ['pw', 'ph', 'safe', 'gut', 'mode', 'nf', 'nw', 'nb', 'nt', 'ns', 'guides'].forEach(id => $(id).addEventListener('input', draw));
   $('print').addEventListener('click', () => window.print());
   $('strip').addEventListener('click', downloadStrip);
   $('copy').addEventListener('click', async () => {
