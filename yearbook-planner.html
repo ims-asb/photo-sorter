@@ -42,7 +42,7 @@ th{color:var(--muted);font-weight:600;font-size:12px}
   <label>Filmstrip<select id="mode" style="width:190px"><option value="table" selected>A table full of Polaroids</option><option value="wind">Winds across the spread</option><option value="wrap">Wraps around in an O</option><option value="straight">Straight, along the bottom</option></select></label>
   <label data-m="table">Picture size<select id="dpi"><option value="150" selected>150 dpi (2550 x 1650)</option><option value="300">300 dpi (5100 x 3300)</option></select></label>
   <label data-m="table">Prints<input id="tn" type="number" min="4" max="30" value="14"></label>
-  <label data-m="table">Film<select id="tf" style="width:150px"><option value="square">Instax square</option><option value="mini">Instax mini</option><option value="classic">Polaroid classic</option></select></label>
+  <label data-m="table">Film<select id="tf" style="width:150px"><option value="mini" selected>Instax mini</option><option value="square">Instax square</option><option value="classic">Polaroid classic</option></select></label>
   <label data-m="table">Tilt (degrees)<input id="tt" type="number" min="0" max="25" value="8"></label>
   <label data-m="table">Overlap<select id="to"><option value="0">None</option><option value="0.2" selected>Some</option><option value="0.4">Lots</option></select></label>
   <button data-m="table" id="shuffle" type="button">Shuffle</button>
@@ -185,18 +185,21 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     svg.setAttribute('viewBox', `0 0 ${2 * W * S} ${H * S}`);
     const parts = [DEFS];
     const r = (x, y, w, h, extra) => `<rect x="${x * S}" y="${y * S}" width="${w * S}" height="${h * S}" ${extra || ''}/>`;
-    parts.push(r(0, 0, 2 * W, H, 'fill="#6b4f3a"'));                                  // the table: a wood-brown top
-    if (real) parts.push(r(0, 0, 2 * W, H, 'filter="url(#paper)"'));
-    for (let y = 0.35; y < H; y += 0.6) parts.push(`<path d="M0 ${y * S}C${W * S * 0.6} ${(y + 0.1) * S} ${W * S * 1.4} ${(y - 0.1) * S} ${2 * W * S} ${y * S}" stroke="#5a412f" stroke-width="2" fill="none" opacity=".6"/>`);
+    parts.push(r(0, 0, 2 * W, H, 'fill="#b99b78"'));                                  // the surface: tan cork, like the reference
+    if (real) parts.push(r(0, 0, 2 * W, H, 'filter="url(#cork)"'));
     if (real) parts.push(r(W - 0.7, 0, 1.4, H, 'fill="url(#foldG)"'));
     for (const b of L.out){
       const tr = `transform="rotate(${b.a} ${b.cx * S} ${b.cy * S})"`, x = b.cx - b.pw / 2, y = b.cy - b.ph / 2;
       parts.push(`<g ${tr}>`);
-      parts.push(r(x, y, b.pw, b.ph, `rx="${0.04 * S}" fill="${b.warm ? '#f4ecd9' : '#f6f4ee'}" ${real ? 'filter="url(#shadowSm)"' : ''}`));
-      if (real) parts.push(r(x, y, b.pw, b.ph, `rx="${0.04 * S}" fill="#fff" filter="url(#grain)" opacity=".35"`));
-      parts.push(r(x + b.wx, y + b.wy, b.ww, b.wh, `fill="${real ? 'url(#photoG)' : '#7d93a8'}" stroke="#bdb6a4" stroke-width="2"`));
+      parts.push(r(x, y, b.pw, b.ph, `rx="${0.03 * S}" fill="${real ? (b.warm ? 'url(#printW)' : 'url(#printG)') : (b.warm ? '#e8e6e0' : '#e3e6ea')}" ${real ? 'filter="url(#shadowSm)"' : ''}`));
+      const chinY = y + b.wy + b.wh + (b.ph - b.wy - b.wh) * 0.22;                   // the strip along the bottom, slightly different in tone, with a crisp top edge
+      parts.push(r(x, chinY, b.pw, y + b.ph - chinY, `rx="${0.03 * S}" fill="#fff" opacity=".28"`));
+      parts.push(`<line x1="${x * S}" x2="${(x + b.pw) * S}" y1="${chinY * S}" y2="${chinY * S}" stroke="#9aa1ab" stroke-opacity=".35" stroke-width="2"/><line x1="${x * S}" x2="${(x + b.pw) * S}" y1="${chinY * S + 2}" y2="${chinY * S + 2}" stroke="#fff" stroke-opacity=".6" stroke-width="2"/>`);
+      if (real) parts.push(r(x, y, b.pw, b.ph, `rx="${0.03 * S}" fill="#fff" filter="url(#grain)" opacity=".14"`));
+      parts.push(r(x + b.wx, y + b.wy, b.ww, b.wh, `fill="${real ? 'url(#photoG)' : '#7d93a8'}"`));
+      parts.push(r(x + b.wx, y + b.wy, b.ww, b.wh, 'fill="none" stroke="#000" stroke-opacity=".28" stroke-width="4"'));   // thin shadow just inside the window
       parts.push(`<text x="${(x + b.wx + b.ww / 2) * S}" y="${(y + b.wy + b.wh / 2) * S + 8}" text-anchor="middle" font-size="${Math.max(18, b.ww * S * 0.2)}" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">${b.id.replace('Print ', '')}</text>`);
-      parts.push(`<text x="${(x + b.pw / 2) * S}" y="${(y + b.ph - (b.ph - b.wy - b.wh) / 2) * S + 6}" text-anchor="middle" font-size="${Math.max(14, b.pw * S * 0.1)}" font-family="'Segoe Script','Bradley Hand','Comic Sans MS',cursive" fill="#8a8880">name here</text>`);
+      parts.push(`<text x="${(x + b.pw / 2) * S}" y="${(y + b.ph - (b.ph - b.wy - b.wh) / 2) * S + 6}" text-anchor="middle" font-size="${Math.max(14, b.pw * S * 0.1)}" font-family="'Segoe Script','Bradley Hand','Comic Sans MS',cursive" fill="#7d8590">name here</text>`);
       parts.push('</g>');
     }
     if ($('guides').checked){
@@ -372,6 +375,9 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#000" flood-opacity=".4"/></filter>
     <filter id="shadowSm" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".3"/></filter>
     <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 1.1 -.5" result="a"/><feComposite in="a" in2="SourceAlpha" operator="in"/></filter>
+    <linearGradient id="printG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eceef1"/><stop offset=".78" stop-color="#dde1e6"/><stop offset="1" stop-color="#d4d9df"/></linearGradient>
+    <linearGradient id="printW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efeeea"/><stop offset=".78" stop-color="#e2e1dc"/><stop offset="1" stop-color="#d8d7d1"/></linearGradient>
+    <filter id="cork" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="3" seed="3" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 .42  0 0 0 0 .3  0 0 0 0 .18  0 0 0 1.6 -.55"/></filter>
     <filter id="paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" seed="9" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .2  0 0 0 .5 -.12"/></filter>
   </defs>`;
 
@@ -452,14 +458,21 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     const k = dpi, c = document.createElement('canvas');
     c.width = Math.round(2 * L.W * k); c.height = Math.round(L.H * k);
     const x = c.getContext('2d');
-    if (kind === 'cut'){ x.fillStyle = '#6b4f3a'; x.fillRect(0, 0, c.width, c.height); }
+    if (kind === 'cut'){ x.fillStyle = '#b99b78'; x.fillRect(0, 0, c.width, c.height); }
     L.out.forEach(b => {
       x.save(); x.translate(b.cx * k, b.cy * k); x.rotate(b.a * Math.PI / 180);
       const px = -b.pw / 2 * k, py = -b.ph / 2 * k, wx = px + b.wx * k, wy = py + b.wy * k;
       if (kind === 'cut'){
         x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 0.08 * k; x.shadowOffsetY = 0.03 * k;
-        x.fillStyle = b.warm ? '#f4ecd9' : '#f6f4ee';
+        const gr = x.createLinearGradient(0, py, 0, py + b.ph * k);
+        gr.addColorStop(0, b.warm ? '#efeeea' : '#eceef1'); gr.addColorStop(.78, b.warm ? '#e2e1dc' : '#dde1e6'); gr.addColorStop(1, b.warm ? '#d8d7d1' : '#d4d9df');
+        x.fillStyle = gr;
         x.beginPath(); x.rect(px, py, b.pw * k, b.ph * k); x.rect(wx, wy, b.ww * k, b.wh * k); x.fill('evenodd');   // the window is a hole
+        x.shadowColor = 'transparent';
+        const cy = wy + b.wh * k + (b.ph - b.wy - b.wh) * 0.22 * k;                     // the strip along the bottom
+        x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px, cy, b.pw * k, py + b.ph * k - cy);
+        x.fillStyle = 'rgba(154,161,171,.35)'; x.fillRect(px, cy, b.pw * k, Math.max(2, 0.008 * k));
+        x.fillStyle = 'rgba(255,255,255,.6)'; x.fillRect(px, cy + Math.max(2, 0.008 * k), b.pw * k, Math.max(2, 0.008 * k));
       } else {
         x.strokeStyle = 'rgba(120,120,120,.9)'; x.lineWidth = Math.max(2, 0.015 * k); x.strokeRect(px, py, b.pw * k, b.ph * k);
         x.fillStyle = 'rgba(46,204,135,.35)'; x.fillRect(wx, wy, b.ww * k, b.wh * k);
