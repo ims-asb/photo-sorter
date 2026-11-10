@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Film Look</title>
+<style>
+:root{--bg:#111110;--bar:#1c1c1a;--line:#2e2d2a;--text:#f0ede8;--muted:#8a8880;--ink:#111110;--keep:#2ecc87;--grade:#e0b84a;--edit:#6b9ff0;--reject:#e05555}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,Segoe UI,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0 8px 0 0}
+.sp{flex:1}
+button,.btn{background:var(--bar);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer}
+button.primary{background:var(--keep);color:var(--ink);border-color:var(--keep);font-weight:700}
+button:disabled{opacity:.45;cursor:default}
+main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;padding:14px 16px;max-width:1300px;margin:0 auto}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+#stage{background:#0b0b0a;border:1px solid var(--line);border-radius:12px;min-height:320px;display:grid;place-items:center;padding:8px;position:relative}
+#view{max-width:100%;max-height:68vh;display:block}
+#drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px;pointer-events:none}
+#drop b{color:var(--text);display:block;font-size:18px;margin-bottom:4px}
+#stage.over{border-color:var(--keep)}
+#badge{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.65);padding:2px 10px;border-radius:6px;font-size:13px;display:none}
+#thumbs{display:flex;gap:8px;overflow-x:auto;padding:10px 0}
+#thumbs img{height:64px;border-radius:6px;border:2px solid transparent;cursor:pointer;flex:none}
+#thumbs img.on{border-color:var(--keep)}
+aside{background:var(--bar);border:1px solid var(--line);border-radius:12px;padding:12px 14px;align-self:start}
+aside h2{font-size:15px;margin:10px 0 6px;color:var(--muted);font-weight:600}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{padding:5px 10px;font-size:13px}
+.row{display:grid;grid-template-columns:110px 1fr 38px;gap:8px;align-items:center;font-size:14px;margin:4px 0}
+.row output{color:var(--muted);font-size:12px;text-align:right}
+input[type=range]{width:100%}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+#msg{color:var(--grade);font-size:14px;min-height:1.4em;margin:6px 0}
+textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:13px/1.4 ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>Film Look</h1>
+  <button id="choose" class="primary" type="button">Choose photos</button>
+  <input id="files" type="file" accept="image/*" multiple hidden>
+  <button id="compare" type="button" disabled>Hold to see the original</button>
+  <span class="sp"></span>
+  <button id="one" type="button" disabled>Save this one</button>
+  <button id="all" type="button" disabled>Save all to a folder</button>
+</header>
+<main>
+  <div>
+    <div id="stage"><canvas id="view" width="10" height="10" hidden></canvas><div id="drop"><div><b>Drop photos here</b>JPG, PNG, WebP. They stay on this computer. Nothing is uploaded.</div></div><div id="badge">Original</div></div>
+    <div id="thumbs"></div>
+    <div id="msg"></div>
+  </div>
+  <aside>
+    <h2>Looks</h2>
+    <div class="presets" id="presets"></div>
+    <h2>Light</h2>
+    <div id="sl-light"></div>
+    <h2>Color</h2>
+    <div id="sl-color"></div>
+    <h2>Film feel</h2>
+    <div id="sl-film"></div>
+    <div style="margin-top:10px;display:flex;gap:6px"><button id="reset" type="button">Reset</button><button id="recipe" type="button">Photoshop settings</button></div>
+    <p class="note">The same look is used on every photo, so a whole batch matches. Originals are never changed.</p>
+    <textarea id="recipeBox" hidden readonly></textarea>
+  </aside>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const KEY = 'filmlook:v1';
+  const DEF = { exposure: 0, contrast: 0, fade: 0, saturation: 1, warmth: 0, shadowHue: 200, shadowAmt: 0, highHue: 40, highAmt: 0, glow: 0, grain: 0, grainSize: 1.5, vignette: 0 };
+  const SLIDERS = [
+    ['sl-light', 'exposure', 'Brightness', -1, 2, 0.05, v => (v > 0 ? '+' : '') + v.toFixed(2)],
+    ['sl-light', 'contrast', 'Contrast', -0.5, 0.6, 0.01, v => v.toFixed(2)],
+    ['sl-light', 'fade', 'Faded blacks', 0, 0.3, 0.005, v => v.toFixed(2)],
+    ['sl-color', 'saturation', 'Color', 0, 1.6, 0.01, v => v.toFixed(2)],
+    ['sl-color', 'warmth', 'Warm / cool', -1, 1, 0.01, v => v.toFixed(2)],
+    ['sl-color', 'shadowHue', 'Shadow tint', 0, 360, 1, v => v + '°'],
+    ['sl-color', 'shadowAmt', 'Shadow amount', 0, 0.6, 0.01, v => v.toFixed(2)],
+    ['sl-color', 'highHue', 'Highlight tint', 0, 360, 1, v => v + '°'],
+    ['sl-color', 'highAmt', 'Highlight amount', 0, 0.6, 0.01, v => v.toFixed(2)],
+    ['sl-film', 'glow', 'Glow', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-film', 'grain', 'Grain', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-film', 'grainSize', 'Grain size', 1, 4, 0.1, v => v.toFixed(1)],
+    ['sl-film', 'vignette', 'Dark corners', 0, 1, 0.01, v => v.toFixed(2)]
+  ];
+  const P = (o) => Object.assign({}, DEF, o);
+  const PRESETS = {
+    'Warm portrait': P({ exposure: 0.1, contrast: 0.1, fade: 0.06, saturation: 0.95, warmth: 0.35, shadowHue: 190, shadowAmt: 0.15, highHue: 38, highAmt: 0.25, glow: 0.15, grain: 0.35, grainSize: 1.5, vignette: 0.2 }),
+    'Faded summer': P({ exposure: 0.25, contrast: -0.1, fade: 0.16, saturation: 0.9, warmth: 0.25, shadowHue: 200, shadowAmt: 0.2, highHue: 45, highAmt: 0.3, glow: 0.2, grain: 0.3, grainSize: 1.5, vignette: 0.15 }),
+    'Cool fade': P({ exposure: 0.1, fade: 0.14, saturation: 0.85, warmth: -0.3, shadowHue: 210, shadowAmt: 0.3, highHue: 190, highAmt: 0.1, glow: 0.1, grain: 0.3, grainSize: 1.5, vignette: 0.2 }),
+    'Flash disposable': P({ exposure: 0.2, contrast: 0.3, fade: 0.05, saturation: 1.15, warmth: 0.1, shadowHue: 160, shadowAmt: 0.15, highHue: 50, highAmt: 0.15, glow: 0.25, grain: 0.5, grainSize: 2, vignette: 0.4 }),
+    'Mono grain': P({ contrast: 0.25, fade: 0.08, saturation: 0, grain: 0.6, grainSize: 1.8, vignette: 0.3 }),
+    'Rescue dark shots': P({ exposure: 1.3, contrast: 0.05, fade: 0.04, saturation: 1.05, warmth: 0.1, grain: 0.2, grainSize: 1.5, vignette: 0.1 })
+  };
+
+  let params = Object.assign({}, DEF), items = [], cur = -1, showOriginal = false;
+
+  /* ---------- the look, applied to an ImageData ---------- */
+  function hueRGB(h){ const x = h / 60, c = 1, k = 1 - Math.abs(x % 2 - 1); const r = [[c, k, 0], [k, c, 0], [0, c, k], [0, k, c], [k, 0, c], [c, 0, k]][Math.floor(x) % 6]; return r; }
+  function rng(seed){ let a = seed | 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const shoulder = x => x < 0.72 ? x : 0.72 + 0.28 * Math.tanh((x - 0.72) / 0.28);   // soft top so brightening does not clip to white
+
+  function tone(data, p){
+    const gain = Math.pow(2, p.exposure), ct = 1 + p.contrast, sh = hueRGB(p.shadowHue), hi = hueRGB(p.highHue);
+    const w = p.warmth * 0.12;
+    for (let i = 0; i < data.length; i += 4){
+      let r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+      if (p.exposure){                                   // exposure in linear light, then a soft top
+        r = shoulder(Math.pow(Math.pow(r, 2.2) * gain, 1 / 2.2)); g = shoulder(Math.pow(Math.pow(g, 2.2) * gain, 1 / 2.2)); b = shoulder(Math.pow(Math.pow(b, 2.2) * gain, 1 / 2.2));
+      }
+      if (p.contrast){ r = (r - 0.5) * ct + 0.5; g = (g - 0.5) * ct + 0.5; b = (b - 0.5) * ct + 0.5; }
+      let L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (p.saturation !== 1){ r = L + (r - L) * p.saturation; g = L + (g - L) * p.saturation; b = L + (b - L) * p.saturation; }
+      if (w){ r *= 1 + w; b *= 1 - w; }
+      L = Math.min(1, Math.max(0, L));
+      if (p.shadowAmt){ const k = p.shadowAmt * Math.pow(1 - L, 2); r += (sh[0] - L) * k * 0.5; g += (sh[1] - L) * k * 0.5; b += (sh[2] - L) * k * 0.5; }
+      if (p.highAmt){ const k = p.highAmt * L * L; r += (hi[0] - L) * k * 0.5; g += (hi[1] - L) * k * 0.5; b += (hi[2] - L) * k * 0.5; }
+      if (p.fade){ r = p.fade + r * (1 - p.fade * 1.4); g = p.fade + g * (1 - p.fade * 1.4); b = p.fade + b * (1 - p.fade * 1.4); }
+      data[i] = Math.max(0, Math.min(255, r * 255)); data[i + 1] = Math.max(0, Math.min(255, g * 255)); data[i + 2] = Math.max(0, Math.min(255, b * 255));
+    }
+  }
+  function finish(data, W, H, p, noise){                // dark corners and grain, after the glow
+    const cx = W / 2, cy = H / 2, rmax = Math.hypot(cx, cy);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+      const i = (y * W + x) * 4;
+      let r = data[i], g = data[i + 1], b = data[i + 2];
+      if (p.vignette){
+        const d = Math.hypot(x - cx, y - cy) / rmax, t = Math.min(1, Math.max(0, (d - 0.35) / 0.75)), v = 1 - p.vignette * 0.75 * t * t * (3 - 2 * t);
+        r *= v; g *= v; b *= v;
+      }
+      if (noise){
+        const L = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255, n = (noise[i] - 128) / 128 * p.grain * 38 * (1 - Math.abs(2 * L - 1) * 0.55);
+        r += n; g += n; b += n;
+      }
+      data[i] = r < 0 ? 0 : r > 255 ? 255 : r; data[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g; data[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+    }
+  }
+  function grainNoise(W, H, size, seed){                // soft grain: noise made small, then stretched up
+    const sw = Math.max(2, Math.round(W / size)), sh = Math.max(2, Math.round(H / size));
+    const c = document.createElement('canvas'); c.width = sw; c.height = sh;
+    const x = c.getContext('2d'), id = x.createImageData(sw, sh), r = rng(seed);
+    for (let i = 0; i < id.data.length; i += 4){ const v = 128 + ((r() + r() + r()) / 3 - 0.5) * 2 * 128 * 1.6; id.data[i] = id.data[i + 1] = id.data[i + 2] = Math.max(0, Math.min(255, v)); id.data[i + 3] = 255; }
+    x.putImageData(id, 0, 0);
+    const big = document.createElement('canvas'); big.width = W; big.height = H;
+    const bx = big.getContext('2d'); bx.imageSmoothingEnabled = true; bx.drawImage(c, 0, 0, W, H);
+    return bx.getImageData(0, 0, W, H).data;
+  }
+  function render(src, W, H, p, seed){                  // src: any drawable, returns a canvas
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(src, 0, 0, W, H);
+    let id = x.getImageData(0, 0, W, H);
+    tone(id.data, p); x.putImageData(id, 0, 0);
+    if (p.glow > 0){                                    // a soft warm bloom around the bright parts
+      const g = document.createElement('canvas'); g.width = W; g.height = H;
+      const gx = g.getContext('2d');
+      gx.filter = `blur(${Math.max(2, Math.round(Math.max(W, H) / 90))}px) brightness(1.15) contrast(1.5) saturate(1.3)`;
+      gx.drawImage(c, 0, 0);
+      x.save(); x.globalCompositeOperation = 'screen'; x.globalAlpha = p.glow * 0.45; x.drawImage(g, 0, 0); x.restore();
+    }
+    if (p.vignette || p.grain){
+      id = x.getImageData(0, 0, W, H);
+      finish(id.data, W, H, p, p.grain ? grainNoise(W, H, Math.max(1, p.grainSize * Math.max(1, Math.max(W, H) / 1400)), seed || 7) : null);
+      x.putImageData(id, 0, 0);
+    }
+    return c;
+  }
+
+  /* ---------- the page ---------- */
+  function msg(t){ $('msg').textContent = t || ''; }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(params)); } catch (e) { /* not remembered */ } }
+  function buildSliders(){
+    for (const [host, key, label, lo, hi, step, fmt] of SLIDERS){
+      const row = document.createElement('div'); row.className = 'row';
+      const l = document.createElement('label'); l.textContent = label; l.htmlFor = 'r-' + key;
+      const inp = document.createElement('input'); inp.type = 'range'; inp.id = 'r-' + key; inp.min = lo; inp.max = hi; inp.step = step; inp.value = params[key];
+      const o = document.createElement('output'); o.id = 'o-' + key; o.textContent = fmt(+params[key]);
+      inp.addEventListener('input', () => { params[key] = +inp.value; o.textContent = fmt(params[key]); save(); preview(); });
+      row.append(l, inp, o); $(host).appendChild(row);
+    }
+    for (const name of Object.keys(PRESETS)){
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
+      b.addEventListener('click', () => setParams(PRESETS[name])); $('presets').appendChild(b);
+    }
+  }
+  function setParams(p){
+    params = Object.assign({}, DEF, p);
+    for (const [, key, , , , , fmt] of SLIDERS){ $('r-' + key).value = params[key]; $('o-' + key).textContent = fmt(params[key]); }
+    save(); preview();
+  }
+  let pending = 0;
+  function preview(){
+    if (cur < 0) return;
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(() => {
+      const it = items[cur], v = $('view');
+      const scale = Math.min(1, 1400 / Math.max(it.bmp.width, it.bmp.height));
+      const W = Math.round(it.bmp.width * scale), H = Math.round(it.bmp.height * scale);
+      const out = showOriginal ? (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(it.bmp, 0, 0, W, H); return c; })() : render(it.bmp, W, H, params, 7);
+      v.width = W; v.height = H; v.getContext('2d').drawImage(out, 0, 0);
+      v.hidden = false; $('drop').style.display = 'none';
+    });
+  }
+  function select(i){
+    cur = i; document.querySelectorAll('#thumbs img').forEach((im, k) => im.classList.toggle('on', k === i));
+    $('badge').style.display = 'none'; preview();
+  }
+  async function addFiles(list){
+    const files = Array.from(list).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name));
+    if (!files.length){ msg('No photos found in that.'); return; }
+    msg('Loading ' + files.length + '…');
+    for (const f of files){
+      try {
+        const bmp = await createImageBitmap(f);
+        const t = document.createElement('canvas'); const s = 128 / Math.max(bmp.width, bmp.height); t.width = Math.round(bmp.width * s); t.height = Math.round(bmp.height * s);
+        t.getContext('2d').drawImage(bmp, 0, 0, t.width, t.height);
+        const img = document.createElement('img'); img.src = t.toDataURL('image/jpeg', 0.7); img.title = f.name;
+        const k = items.length; img.addEventListener('click', () => select(k)); $('thumbs').appendChild(img);
+        items.push({ file: f, bmp, name: f.name.replace(/\.[^.]+$/, '') });
+      } catch (e){ msg('Could not open ' + f.name); }
+    }
+    $('compare').disabled = $('one').disabled = $('all').disabled = !items.length;
+    msg(items.length + ' photo' + (items.length === 1 ? '' : 's') + ' loaded.');
+    if (cur < 0 && items.length) select(0);
+  }
+  function fullRender(it){
+    let W = it.bmp.width, H = it.bmp.height;
+    const mp = W * H / 1e6; if (mp > 50){ const s = Math.sqrt(50 / mp); W = Math.round(W * s); H = Math.round(H * s); }
+    return render(it.bmp, W, H, params, 7);
+  }
+  const toBlob = (c, q) => new Promise(res => c.toBlob(res, 'image/jpeg', q));
+  async function saveOne(){
+    const it = items[cur]; const blob = await toBlob(fullRender(it), 0.93);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = it.name + ' film.jpg';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  async function saveAll(){
+    if (typeof window.showDirectoryPicker !== 'function'){ msg('Saving to a folder needs Chrome or Edge. Use "Save this one" for each photo.'); return; }
+    let dir;
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'film-look' }); } catch (e){ return; }
+    const out = await dir.getDirectoryHandle('Film look', { create: true });
+    $('all').disabled = true; let n = 0;
+    for (const it of items){
+      msg(`Saving ${++n} of ${items.length}…`);
+      await new Promise(r => setTimeout(r, 20));
+      try {
+        const blob = await toBlob(fullRender(it), 0.93);
+        let name = it.name + ' film.jpg', k = 2;
+        while (true){ try { await out.getFileHandle(name); name = `${it.name} film (${k++}).jpg`; } catch (e){ break; } }
+        const fh = await out.getFileHandle(name, { create: true }), w = await fh.createWritable(); await w.write(blob); await w.close();
+      } catch (e){ msg('Could not save ' + it.name); }
+    }
+    $('all').disabled = false; msg(`Saved ${items.length} photo${items.length === 1 ? '' : 's'} into a folder called "Film look". Your originals were not changed.`);
+  }
+  function recipe(){
+    const p = params, f = (v, d) => (v >= 0 ? '+' : '') + v.toFixed(d || 0);
+    const lines = [
+      'Photoshop: open the photo, then Filter > Camera Raw Filter (or Lightroom). These are close matches, not exact.',
+      '',
+      'Basic',
+      `  Exposure ${f(p.exposure * 0.9, 2)}   Contrast ${f(p.contrast * 100)}`,
+      `  Highlights ${f(-p.exposure * 25 - p.fade * 100)}   Shadows ${f(p.exposure * 30 + p.fade * 120)}`,
+      `  Whites ${f(-p.fade * 60)}   Blacks ${f(p.fade * 160)}`,
+      `  Saturation ${f((p.saturation - 1) * 100)}`,
+      `  Temperature ${f(p.warmth * 12)} (or warm the Color Balance)`,
+      '',
+      'Curves (Point curve, RGB)',
+      `  Drag the bottom-left point UP to about ${Math.round(p.fade * 255)} (this is the faded black look)`,
+      `  Drag the top-right point down a little to about ${Math.round(255 - p.fade * 120)}`,
+      '',
+      'Color Grading',
+      `  Shadows: hue ${p.shadowHue}, saturation ${Math.round(p.shadowAmt * 100)}`,
+      `  Highlights: hue ${p.highHue}, saturation ${Math.round(p.highAmt * 100)}`,
+      '',
+      'Effects',
+      `  Grain: amount ${Math.round(p.grain * 60)}, size ${Math.round(12 + p.grainSize * 10)}, roughness 50`,
+      `  Vignette: amount ${f(-p.vignette * 35)}`,
+      `  Dehaze: ${f(-p.glow * 25)} (a soft glow)`
+    ];
+    $('recipeBox').value = lines.join('\n'); $('recipeBox').hidden = false; $('recipeBox').select();
+    try { navigator.clipboard.writeText($('recipeBox').value); msg('Photoshop settings copied.'); } catch (e) { /* the box is selected, press Ctrl+C */ }
+  }
+
+  $('choose').addEventListener('click', () => $('files').click());
+  $('files').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+  $('one').addEventListener('click', saveOne);
+  $('all').addEventListener('click', saveAll);
+  $('reset').addEventListener('click', () => setParams(DEF));
+  $('recipe').addEventListener('click', recipe);
+  const cmp = on => { if (cur < 0) return; showOriginal = on; $('badge').style.display = on ? 'block' : 'none'; preview(); };
+  $('compare').addEventListener('pointerdown', () => cmp(true));
+  window.addEventListener('pointerup', () => { if (showOriginal) cmp(false); });
+  const stage = $('stage');
+  ['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
+  stage.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight' && cur < items.length - 1) select(cur + 1);
+    if (e.key === 'ArrowLeft' && cur > 0) select(cur - 1);
+  });
+
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) params = Object.assign({}, DEF, s); } catch (e) { /* first visit */ }
+  buildSliders();
+  window.filmLook = { tone, DEF, PRESETS, render, getParams: () => params };
+})();
+</script>
+</body>
+</html>
