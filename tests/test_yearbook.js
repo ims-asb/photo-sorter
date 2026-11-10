@@ -62,7 +62,7 @@ const check = (l, c, x) => { if (c) console.log('PASS', l); else { failures++; c
   }
   // the table of Polaroids
   set('mode', 'table');
-  for (const [n, film, tilt, ov] of [[14, 'square', 8, '0.2'], [10, 'mini', 12, '0'], [20, 'classic', 6, '0.4'], [6, 'square', 0, '0.2']]){
+  for (const [n, film, tilt, ov] of [[14, 'square', 8, '0.2'], [10, 'mini', 12, '0'], [20, 'classic', 6, '0.4'], [6, 'square', 0, '0.2'], [10, 'wide', 8, '0.2']]){
     set('tn', n); set('tf', film); set('tt', tilt); set('to', ov);
     const L = win.yearbookPlanner.layout(), { out, W, H, safe, gut } = L, tag = `table ${n} ${film} tilt ${tilt} overlap ${ov}`;
     check(`${tag}: ${n} prints`, out.length === n, out.length);

@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yearbook Designer</title>
+<style>
+:root{--bg:#111110;--bar:#1c1c1a;--line:#2e2d2a;--text:#f0ede8;--muted:#8a8880;--ink:#111110;--keep:#2ecc87;--grade:#e0b84a;--edit:#6b9ff0;--reject:#e05555}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,Segoe UI,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--bar);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 8px 0 0}
+button,select,input,textarea{font:inherit}
+button{background:var(--bar);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--keep);color:var(--ink);border-color:var(--keep);font-weight:700}
+button:disabled{opacity:.45;cursor:default}
+select,input[type=number],input[type=text],textarea{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+.sp{flex:1}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;padding:12px 14px}
+@media(max-width:960px){main{grid-template-columns:minmax(0,1fr)}}
+#stageWrap{background:#0b0b0a;border:1px solid var(--line);border-radius:12px;padding:8px}
+#cv{display:block;width:100%;height:auto;touch-action:none;cursor:default;border-radius:6px}
+aside{background:var(--bar);border:1px solid var(--line);border-radius:12px;padding:10px 12px;align-self:start}
+aside h2{font-size:13px;margin:12px 0 6px;color:var(--muted);font-weight:600;text-transform:none}
+aside h2:first-child{margin-top:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
+.grid2 label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.grid2 input,.grid2 select{width:100%}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+textarea{width:100%;height:70px}
+#warns{margin:10px 0 0;padding:0;list-style:none;font-size:13px}
+#warns li{color:var(--grade);margin:3px 0}
+#warns li.ok{color:var(--muted)}
+#msg{color:var(--grade);min-height:1.3em;font-size:13px;margin:6px 2px}
+.note{color:var(--muted);font-size:12px;margin:8px 0 0}
+#sizes{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+#sizes td,#sizes th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:left}
+#sizes th{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>Yearbook Designer</h1>
+  <button id="addPhoto" type="button">+ Photo</button>
+  <button id="addPrint" type="button">+ Polaroid</button>
+  <button id="addText" type="button">+ Text</button>
+  <button id="loadPhotos" class="primary" type="button">Load photos</button>
+  <input id="files" type="file" accept="image/*" multiple hidden>
+  <select id="tpl" title="Start from a layout"><option value="">Start from…</option><option value="blank">Blank page</option><option value="table">Polaroid table</option><option value="hero">Big photo and small ones</option></select>
+  <span class="sp"></span>
+  <button id="undo" type="button">Undo</button>
+  <button id="saveJson" type="button">Save project</button>
+  <button id="openJson" type="button">Open project</button>
+  <input id="jsonFile" type="file" accept="application/json,.json" hidden>
+</header>
+<main>
+  <div>
+    <div id="stageWrap"><canvas id="cv" width="1500" height="1000"></canvas></div>
+    <div id="msg"></div>
+    <ul id="warns"></ul>
+  </div>
+  <aside>
+    <h2>Page</h2>
+    <div class="grid2">
+      <label>Page width (in)<input id="pw" type="number" step="0.125" value="7.5" min="3" max="14"></label>
+      <label>Page height (in)<input id="ph" type="number" step="0.125" value="11" min="3" max="17"></label>
+      <label>Safe margin (in)<input id="safe" type="number" step="0.0625" value="0.375" min="0" max="1"></label>
+      <label>Keep clear at fold (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0" max="1.5"></label>
+      <label>Background<select id="bg"><option value="cork">Cork</option><option value="paper">Paper</option><option value="white">White</option><option value="dark">Dark</option></select></label>
+      <label>Safe lines<select id="guides"><option value="1">Show</option><option value="0">Hide</option></select></label>
+    </div>
+    <h2>Selected</h2>
+    <div id="sel"><div class="note">Click something on the page. Drag it to move. Drag a corner to resize. Drag the dot above it to tilt.</div></div>
+    <h2>Export</h2>
+    <div class="grid2">
+      <label>Part<select id="part"><option value="spread">Whole spread</option><option value="left">Left page</option><option value="right">Right page</option></select></label>
+      <label>Quality<select id="dpi"><option value="150">150 dpi (draft)</option><option value="300">300 dpi (final)</option></select></label>
+    </div>
+    <div class="row">
+      <button id="expFlat" class="primary" type="button">Download the page picture</button>
+      <button id="expFrames" type="button">Download frames only</button>
+      <button id="copySizes" type="button">Copy the sizes</button>
+    </div>
+    <p class="note">Photos stay on this computer. Nothing is uploaded. Save project keeps the layout but not the photos, so load them again when you open it.</p>
+  </aside>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const FILMS = {
+    mini: { w: 54, h: 86, ww: 46, wh: 62, side: 4, top: 5, name: 'Instax mini' },
+    square: { w: 72, h: 86, ww: 62, wh: 62, side: 5, top: 5, name: 'Instax square' },
+    wide: { w: 108, h: 86, ww: 99, wh: 62, side: 4.5, top: 5, name: 'Instax wide' },
+    classic: { w: 88, h: 107, ww: 79, wh: 79, side: 4.5, top: 6, name: 'Polaroid classic' }
+  };
+  const FONTS = { sans: 'system-ui,Segoe UI,Arial,sans-serif', serif: 'Georgia,Times New Roman,serif', script: "'Segoe Script','Bradley Hand','Comic Sans MS',cursive", mono: 'ui-monospace,Consolas,monospace' };
+  const imgs = new Map();            // image id -> { el, name, w, h }
+  let items = [], nextId = 1, nextImg = 1, sel = null, history = [], drag = null;
+  const KEY = 'yearbookdesigner:v1';
+
+  const P = () => ({ pw: +$('pw').value || 7.5, ph: +$('ph').value || 11, safe: +$('safe').value || 0, gut: +$('gut').value || 0 });
+  const N = v => Math.round(v * 1000) / 1000;
+  const rad = d => d * Math.PI / 180;
+
+  /* ---------- items ---------- */
+  function filmOf(it){ return FILMS[it.film] || FILMS.mini; }
+  function dims(it){                                   // outer size (inches) of an item
+    if (it.type === 'print'){ const F = filmOf(it); return { w: it.h * F.w / F.h, h: it.h }; }
+    return { w: it.w, h: it.h };
+  }
+  function windowOf(it){                              // the photo window inside a print or photo (inches, relative to the item's center)
+    const d = dims(it);
+    if (it.type === 'print'){ const F = filmOf(it), k = it.h / F.h; return { x: -d.w / 2 + F.side * k, y: -d.h / 2 + F.top * k, w: F.ww * k, h: F.wh * k }; }
+    return { x: -d.w / 2, y: -d.h / 2, w: d.w, h: d.h };
+  }
+  function add(type, o){
+    const p = P();
+    const it = Object.assign({ id: nextId++, type, cx: p.pw, cy: p.ph / 2, w: 3, h: 3, rot: 0, imgId: 0, zoom: 1, ox: 0, oy: 0, film: 'mini', caption: '', warm: false,
+      text: 'Your title', font: 'sans', size: 36, color: '#111110', align: 'center', bold: true }, o || {});
+    if (type === 'print' && !(o && o.h)) it.h = 3.4;
+    if (type === 'text' && !(o && o.w)){ it.w = 4; it.h = 1; }
+    items.push(it); return it;
+  }
+  function snapshot(){
+    history.push(JSON.stringify(items)); if (history.length > 60) history.shift();
+    save();
+  }
+  function restore(json){ items = JSON.parse(json); sel = null; refresh(); }
+
+  /* ---------- drawing ---------- */
+  const noiseCache = {};
+  function noisePattern(kind){
+    if (noiseCache[kind]) return noiseCache[kind];
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d'), id = x.createImageData(256, 256);
+    let s = kind === 'cork' ? 11 : 5;
+    const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    for (let i = 0; i < id.data.length; i += 4){
+      const v = r();
+      if (kind === 'cork'){ const dark = v < 0.18, light = v > 0.9; id.data[i] = dark ? 90 : light ? 230 : 0; id.data[i + 1] = dark ? 62 : light ? 200 : 0; id.data[i + 2] = dark ? 36 : light ? 150 : 0; id.data[i + 3] = dark ? 90 : light ? 60 : 0; }
+      else { id.data[i] = id.data[i + 1] = id.data[i + 2] = v < 0.5 ? 60 : 255; id.data[i + 3] = 14; }
+    }
+    x.putImageData(id, 0, 0);
+    return noiseCache[kind] = x.createPattern(c, 'repeat');
+  }
+  function drawBackground(x, k, W2, H, kind){
+    const base = { cork: '#b99b78', paper: '#e9e4d8', white: '#ffffff', dark: '#1c1c1a' }[kind] || '#fff';
+    x.fillStyle = base; x.fillRect(0, 0, W2 * k, H * k);
+    if (kind === 'cork' || kind === 'paper'){
+      x.save(); x.scale(Math.max(1, k / 100), Math.max(1, k / 100)); x.fillStyle = noisePattern(kind); x.fillRect(0, 0, W2 * k, H * k); x.restore();
+    }
+  }
+  function roundRectPath(x, px, py, w, h, r){
+    x.moveTo(px + r, py); x.lineTo(px + w - r, py); x.quadraticCurveTo(px + w, py, px + w, py + r); x.lineTo(px + w, py + h - r);
+    x.quadraticCurveTo(px + w, py + h, px + w - r, py + h); x.lineTo(px + r, py + h); x.quadraticCurveTo(px, py + h, px, py + h - r);
+    x.lineTo(px, py + r); x.quadraticCurveTo(px, py, px + r, py); x.closePath();
+  }
+  function drawImageCover(x, img, wx, wy, ww, wh, it, k){
+    const sc = Math.max(ww / img.w, wh / img.h) * it.zoom;           // inches per source pixel
+    const dw = img.w * sc, dh = img.h * sc;
+    const maxX = Math.max(0, (dw - ww) / 2), maxY = Math.max(0, (dh - wh) / 2);
+    const cx = wx + ww / 2 + it.ox * maxX, cy = wy + wh / 2 + it.oy * maxY;
+    x.save(); x.beginPath(); x.rect(wx * k, wy * k, ww * k, wh * k); x.clip();
+    x.drawImage(img.el, (cx - dw / 2) * k, (cy - dh / 2) * k, dw * k, dh * k); x.restore();
+  }
+  function wrapLines(x, text, maxW){
+    const out = [];
+    for (const para of String(text).split('\n')){
+      let line = '';
+      for (const word of para.split(' ')){
+        const t = line ? line + ' ' + word : word;
+        if (x.measureText(t).width > maxW && line){ out.push(line); line = word; } else line = t;
+      }
+      out.push(line);
+    }
+    return out;
+  }
+  function drawItem(x, k, it, o){                       // o: { frames: only the see-through frames, shadows: bool }
+    const d = dims(it), w = d.w, h = d.h, img = imgs.get(it.imgId);
+    x.save(); x.translate(it.cx * k, it.cy * k); x.rotate(rad(it.rot));
+    const px = -w / 2 * k, py = -h / 2 * k;
+    if (it.type === 'photo'){
+      if (o.frames){ x.restore(); return; }
+      if (img) drawImageCover(x, img, -w / 2, -h / 2, w, h, it, k);
+      else { const g = x.createLinearGradient(0, py, 0, py + h * k); g.addColorStop(0, '#a9bdd0'); g.addColorStop(1, '#5f7488'); x.fillStyle = g; x.fillRect(px, py, w * k, h * k);
+        x.fillStyle = 'rgba(255,255,255,.85)'; x.font = `700 ${Math.max(12, Math.min(w, h) * k * 0.16)}px system-ui`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('Photo', 0, 0); }
+    } else if (it.type === 'print'){
+      const W0 = windowOf(it);
+      if (img && !o.frames) drawImageCover(x, img, W0.x, W0.y, W0.w, W0.h, it, k);
+      else if (!o.frames){ const g = x.createLinearGradient(0, W0.y * k, 0, (W0.y + W0.h) * k); g.addColorStop(0, '#a9bdd0'); g.addColorStop(1, '#5f7488'); x.fillStyle = g; x.fillRect(W0.x * k, W0.y * k, W0.w * k, W0.h * k); }
+      // the frame: cool gray-white, with a hole for the photo, a strip along the bottom, and a shadow
+      x.save();
+      if (o.shadows !== false){ x.shadowColor = 'rgba(0,0,0,.38)'; x.shadowBlur = Math.max(4, 0.07 * k); x.shadowOffsetY = 0.035 * k; }
+      const gr = x.createLinearGradient(0, py, 0, py + h * k);
+      gr.addColorStop(0, it.warm ? '#efeeea' : '#eceef1'); gr.addColorStop(.78, it.warm ? '#e2e1dc' : '#dde1e6'); gr.addColorStop(1, it.warm ? '#d8d7d1' : '#d4d9df');
+      x.fillStyle = gr; x.beginPath(); roundRectPath(x, px, py, w * k, h * k, 0.03 * k); x.rect(W0.x * k, W0.y * k, W0.w * k, W0.h * k); x.fill('evenodd');
+      x.restore();
+      const cy = (W0.y + W0.h + (h / 2 - W0.y - W0.h) * 0.22) * k;
+      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px, cy, w * k, py + h * k - cy);
+      x.fillStyle = 'rgba(154,161,171,.35)'; x.fillRect(px, cy, w * k, Math.max(1, 0.008 * k));
+      x.fillStyle = 'rgba(255,255,255,.6)'; x.fillRect(px, cy + Math.max(1, 0.008 * k), w * k, Math.max(1, 0.008 * k));
+      x.strokeStyle = 'rgba(0,0,0,.28)'; x.lineWidth = Math.max(1, 0.012 * k); x.strokeRect(W0.x * k, W0.y * k, W0.w * k, W0.h * k);
+      if (it.caption && !o.frames){
+        x.fillStyle = '#4b5059'; x.font = `${Math.max(8, w * k * 0.09)}px ${FONTS.script}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText(it.caption, 0, (cy + py + h * k) / 2 + Math.max(1, 0.008 * k), w * k * 0.9);
+      }
+    } else if (it.type === 'text'){
+      if (o.frames){ x.restore(); return; }
+      x.fillStyle = it.color; x.textBaseline = 'top';
+      const px2 = it.size / 72 * k;                      // points to pixels at this scale
+      x.font = `${it.bold ? '700 ' : ''}${px2}px ${FONTS[it.font] || FONTS.sans}`;
+      const lines = wrapLines(x, it.text, w * k);
+      x.textAlign = it.align;
+      const ax = it.align === 'center' ? 0 : it.align === 'right' ? w * k / 2 : -w * k / 2;
+      lines.forEach((ln, i) => x.fillText(ln, ax, py + i * px2 * 1.2));
+    }
+    x.restore();
+  }
+  function drawPage(x, k, opts){
+    const p = P(), o = opts || {};
+    if (!o.frames) drawBackground(x, k, 2 * p.pw, p.ph, $('bg').value);
+    items.forEach(it => drawItem(x, k, it, o));
+  }
+  function guides(x, k){
+    const p = P(), W2 = p.pw * k, H = p.ph * k, sf = p.safe * k, gt = p.gut * k;
+    x.save();
+    x.fillStyle = 'rgba(224,85,85,.14)'; x.fillRect(W2 - gt, 0, 2 * gt, H);
+    x.setLineDash([8, 6]); x.lineWidth = 2;
+    x.strokeStyle = '#e05555'; x.strokeRect(1, 1, 2 * W2 - 2, H - 2);
+    x.strokeStyle = '#4f86ec';
+    x.strokeRect(sf, sf, W2 - sf - gt, H - 2 * sf); x.strokeRect(W2 + gt, sf, W2 - sf - gt, H - 2 * sf);
+    x.setLineDash([]); x.strokeStyle = 'rgba(70,70,70,.8)'; x.beginPath(); x.moveTo(W2, 0); x.lineTo(W2, H); x.stroke();
+    x.restore();
+  }
+  function corners(it){
+    const d = dims(it), c = Math.cos(rad(it.rot)), s = Math.sin(rad(it.rot));
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => ({ sx, sy, x: it.cx + (sx * d.w / 2) * c - (sy * d.h / 2) * s, y: it.cy + (sx * d.w / 2) * s + (sy * d.h / 2) * c }));
+  }
+  function rotHandle(it){
+    const d = dims(it), off = d.h / 2 + 0.35, c = Math.cos(rad(it.rot)), s = Math.sin(rad(it.rot));
+    return { x: it.cx - (-off) * -s * 0 + (0) * c - (-off) * s * -1 * 0 + off * s, y: it.cy - off * c };
+  }
+  function render(){
+    const p = P(), k = cv.width / (2 * p.pw);
+    cv.height = Math.round(p.ph * k);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawPage(ctx, k);
+    if ($('guides').value === '1') guides(ctx, k);
+    const it = items.find(i => i.id === sel);
+    if (it){
+      const cs = corners(it);
+      ctx.save(); ctx.strokeStyle = '#2ecc87'; ctx.lineWidth = 2; ctx.beginPath();
+      cs.forEach((q, i) => i ? ctx.lineTo(q.x * k, q.y * k) : ctx.moveTo(q.x * k, q.y * k)); ctx.closePath(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2ecc87';
+      cs.forEach(q => { ctx.beginPath(); ctx.rect(q.x * k - 6, q.y * k - 6, 12, 12); ctx.fill(); ctx.stroke(); });
+      const rh = rotHandle(it), top = { x: (cs[0].x + cs[1].x) / 2, y: (cs[0].y + cs[1].y) / 2 };
+      ctx.beginPath(); ctx.moveTo(top.x * k, top.y * k); ctx.lineTo(rh.x * k, rh.y * k); ctx.stroke();
+      ctx.beginPath(); ctx.arc(rh.x * k, rh.y * k, 7, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  /* ---------- pointer ---------- */
+  function toInches(e){
+    const r = cv.getBoundingClientRect(), p = P(), k = cv.width / (2 * p.pw);
+    return { x: (e.clientX - r.left) * (cv.width / r.width) / k, y: (e.clientY - r.top) * (cv.height / r.height) / k, k, scale: r.width / cv.width };
+  }
+  function local(it, pt){ const c = Math.cos(rad(-it.rot)), s = Math.sin(rad(-it.rot)), dx = pt.x - it.cx, dy = pt.y - it.cy; return { x: dx * c - dy * s, y: dx * s + dy * c }; }
+  function hit(pt){
+    for (let i = items.length - 1; i >= 0; i--){ const it = items[i], l = local(it, pt), d = dims(it); if (Math.abs(l.x) <= d.w / 2 && Math.abs(l.y) <= d.h / 2) return it; }
+    return null;
+  }
+  cv.addEventListener('pointerdown', e => {
+    const pt = toInches(e), it0 = items.find(i => i.id === sel), tol = 12 / (pt.k * pt.scale);
+    drag = null;
+    if (it0){
+      const rh = rotHandle(it0);
+      if (Math.hypot(pt.x - rh.x, pt.y - rh.y) < tol){ drag = { kind: 'rot', it: it0, before: JSON.stringify(items) }; }
+      else for (const q of corners(it0)) if (Math.hypot(pt.x - q.x, pt.y - q.y) < tol){
+        const d = dims(it0), c = Math.cos(rad(it0.rot)), s = Math.sin(rad(it0.rot));
+        const ax = it0.cx - (q.sx * d.w / 2) * c + (q.sy * d.h / 2) * s, ay = it0.cy - (q.sx * d.w / 2) * s - (q.sy * d.h / 2) * c;   // the opposite corner stays put
+        drag = { kind: 'size', it: it0, sx: q.sx, sy: q.sy, ax, ay, w0: d.w, h0: d.h, before: JSON.stringify(items) };
+      }
+    }
+    if (!drag){
+      const h = hit(pt); sel = h ? h.id : null;
+      if (h) drag = { kind: 'move', it: h, dx: pt.x - h.cx, dy: pt.y - h.cy, before: JSON.stringify(items) };
+    }
+    if (drag) cv.setPointerCapture(e.pointerId);
+    refresh(false); e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const pt = toInches(e), it = drag.it;
+    if (drag.kind === 'move'){ it.cx = N(pt.x - drag.dx); it.cy = N(pt.y - drag.dy); }
+    else if (drag.kind === 'rot'){ let a = Math.atan2(pt.x - it.cx, -(pt.y - it.cy)) * 180 / Math.PI; if (e.shiftKey) a = Math.round(a / 15) * 15; it.rot = N(a); }
+    else if (drag.kind === 'size'){
+      const c = Math.cos(rad(-it.rot)), s = Math.sin(rad(-it.rot)), dx = pt.x - drag.ax, dy = pt.y - drag.ay;
+      const lx = (dx * c - dy * s) * drag.sx, ly = (dx * s + dy * c) * drag.sy;
+      let w = Math.max(0.3, lx), h = Math.max(0.3, ly);
+      if (it.type === 'print'){ const sc = Math.max(w / drag.w0, h / drag.h0); h = Math.max(0.6, drag.h0 * sc); w = h * filmOf(it).w / filmOf(it).h; }
+      if (it.type === 'print') it.h = N(h); else { it.w = N(w); it.h = N(h); }
+      const cc = Math.cos(rad(it.rot)), ss = Math.sin(rad(it.rot)), nw = it.type === 'print' ? w : it.w, nh = it.type === 'print' ? h : it.h;
+      it.cx = N(drag.ax + (drag.sx * nw / 2) * cc - (drag.sy * nh / 2) * ss); it.cy = N(drag.ay + (drag.sx * nw / 2) * ss + (drag.sy * nh / 2) * cc);
+    }
+    refresh(false);
+  });
+  cv.addEventListener('pointerup', () => {
+    if (drag && JSON.stringify(items) !== drag.before){ history.push(drag.before); if (history.length > 60) history.shift(); save(); }
+    drag = null; refresh();
+  });
+  cv.addEventListener('dblclick', e => { const h = hit(toInches(e)); if (h && (h.type === 'photo' || h.type === 'print')){ pickFor = h.id; $('files').click(); } });
+  let pickFor = null;
+  cv.addEventListener('dragover', e => e.preventDefault());
+  cv.addEventListener('drop', e => { e.preventDefault(); const h = hit(toInches(e)); loadFiles(e.dataTransfer.files, h && (h.type === 'photo' || h.type === 'print') ? h.id : null); });
+  document.addEventListener('keydown', e => {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const it = items.find(i => i.id === sel);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && it){ e.preventDefault(); snapshot(); const c = Object.assign({}, it, { id: nextId++, cx: it.cx + 0.3, cy: it.cy + 0.3 }); items.push(c); sel = c.id; refresh(); return; }
+    if (!it) return;
+    if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); snapshot(); items = items.filter(i => i !== it); sel = null; refresh(); }
+    else if (e.key.startsWith('Arrow')){ e.preventDefault(); const st = e.shiftKey ? 0.25 : 0.05; snapshot(); if (e.key === 'ArrowLeft') it.cx -= st; if (e.key === 'ArrowRight') it.cx += st; if (e.key === 'ArrowUp') it.cy -= st; if (e.key === 'ArrowDown') it.cy += st; it.cx = N(it.cx); it.cy = N(it.cy); refresh(); }
+    else if (e.key === ']'){ const i = items.indexOf(it); if (i < items.length - 1){ snapshot(); items.splice(i, 1); items.splice(i + 1, 0, it); refresh(); } }
+    else if (e.key === '['){ const i = items.indexOf(it); if (i > 0){ snapshot(); items.splice(i, 1); items.splice(i - 1, 0, it); refresh(); } }
+  });
+  function undo(){ if (!history.length) return; restore(history.pop()); save(); }
+
+  /* ---------- photos ---------- */
+  function readImage(file){
+    return new Promise(res => {
+      const el = new Image(), url = URL.createObjectURL(file);
+      el.onload = () => { const id = nextImg++; imgs.set(id, { el, name: file.name, w: el.naturalWidth, h: el.naturalHeight }); res(id); };
+      el.onerror = () => res(0); el.src = url;
+    });
+  }
+  async function loadFiles(list, target){
+    const files = Array.from(list).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    if (!files.length) { msg('No photos found.'); return; }
+    snapshot(); let used = 0;
+    if (target){ const id = await readImage(files[0]); const it = items.find(i => i.id === target); if (id && it){ it.imgId = id; it.zoom = 1; it.ox = it.oy = 0; used = 1; } }
+    else {
+      const empties = items.filter(i => (i.type === 'photo' || i.type === 'print') && !i.imgId);
+      for (const f of files){
+        const slot = empties.shift(); if (!slot) break;
+        const id = await readImage(f); if (id){ slot.imgId = id; slot.zoom = 1; slot.ox = slot.oy = 0; used++; }
+      }
+    }
+    msg(used + ' photo' + (used === 1 ? '' : 's') + ' placed' + (files.length > used && !target ? '. ' + (files.length - used) + ' more than boxes: add boxes with + Photo or + Polaroid, then load again.' : '.'));
+    refresh();
+  }
+  function msg(t){ $('msg').textContent = t || ''; }
+
+  /* ---------- the side panel ---------- */
+  function num(label, key, it, step){ return `<label>${label}<input type="number" step="${step || 0.05}" data-k="${key}" value="${N(it[key])}"></label>`; }
+  function panel(){
+    const it = items.find(i => i.id === sel), box = $('sel');
+    if (!it){ box.innerHTML = '<div class="note">Click something on the page. Drag it to move. Drag a corner to resize. Drag the dot above it to tilt. Double-click a photo to choose its picture. Delete removes. Arrow keys nudge. Ctrl+Z undoes.</div>'; return; }
+    const d = dims(it);
+    let h = `<div class="grid2">${num('Across (in)', 'cx', it)}${num('Down (in)', 'cy', it)}`;
+    h += it.type === 'print' ? num('Height (in)', 'h', it) : `${num('Width (in)', 'w', it)}${num('Height (in)', 'h', it)}`;
+    h += `${num('Tilt (deg)', 'rot', it, 1)}</div>`;
+    if (it.type === 'print') h += `<div class="grid2"><label>Film<select data-k="film">${Object.keys(FILMS).map(k => `<option value="${k}"${it.film === k ? ' selected' : ''}>${FILMS[k].name}</option>`).join('')}</select></label><label>Color<select data-k="warm"><option value="0">Cool white</option><option value="1"${it.warm ? ' selected' : ''}>Warm white</option></select></label></div><label class="note" style="display:block">Caption<input type="text" data-k="caption" value="${(it.caption || '').replace(/"/g, '&quot;')}" style="width:100%"></label>`;
+    if (it.type === 'photo' || it.type === 'print'){
+      h += `<div class="grid2"><label>Zoom<input type="range" min="1" max="3" step="0.05" data-k="zoom" value="${it.zoom}"></label><label>Slide across<input type="range" min="-1" max="1" step="0.02" data-k="ox" value="${it.ox}"></label><label>Slide up and down<input type="range" min="-1" max="1" step="0.02" data-k="oy" value="${it.oy}"></label></div>`;
+      h += `<div class="row"><button id="pickImg" type="button">Choose picture</button><button id="clearImg" type="button">Clear</button></div>`;
+    }
+    if (it.type === 'text'){
+      h += `<textarea data-k="text">${it.text.replace(/</g, '&lt;')}</textarea><div class="grid2"><label>Font<select data-k="font">${Object.keys(FONTS).map(k => `<option value="${k}"${it.font === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>${num('Size (pt)', 'size', it, 1)}<label>Color<input type="color" data-k="color" value="${it.color}"></label><label>Align<select data-k="align">${['left', 'center', 'right'].map(a => `<option${it.align === a ? ' selected' : ''}>${a}</option>`).join('')}</select></label><label>Bold<select data-k="bold"><option value="1">Yes</option><option value="0"${it.bold ? '' : ' selected'}>No</option></select></label></div>`;
+    }
+    h += `<div class="row"><button id="dup" type="button">Duplicate</button><button id="front" type="button">Bring forward</button><button id="back" type="button">Send back</button><button id="del" type="button">Delete</button></div>`;
+    box.innerHTML = h;
+    box.querySelectorAll('[data-k]').forEach(el => el.addEventListener('input', () => {
+      const k = el.dataset.k; let v = el.value;
+      if (el.type === 'number' || el.type === 'range') v = +v; else if (k === 'warm' || k === 'bold') v = v === '1';
+      if (it[k] !== v){ if (!el._snap){ snapshot(); el._snap = true; setTimeout(() => { el._snap = false; }, 800); } it[k] = v; refresh(false); warnings(); sizes(); }
+    }));
+    const on = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
+    on('pickImg', () => { pickFor = it.id; $('files').click(); });
+    on('clearImg', () => { snapshot(); it.imgId = 0; refresh(); });
+    on('dup', () => { snapshot(); const c = Object.assign({}, it, { id: nextId++, cx: it.cx + 0.3, cy: it.cy + 0.3 }); items.push(c); sel = c.id; refresh(); });
+    on('front', () => { const i = items.indexOf(it); if (i < items.length - 1){ snapshot(); items.splice(i, 1); items.splice(i + 1, 0, it); refresh(); } });
+    on('back', () => { const i = items.indexOf(it); if (i > 0){ snapshot(); items.splice(i, 1); items.splice(i - 1, 0, it); refresh(); } });
+    on('del', () => { snapshot(); items = items.filter(i => i !== it); sel = null; refresh(); });
+  }
+  function bounds(it){
+    const cs = corners(it), xs = cs.map(c => c.x), ys = cs.map(c => c.y);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  }
+  function warnings(){
+    const p = P(), out = [], eps = 0.01;
+    items.forEach((it, i) => {
+      const b = bounds(it), name = (it.type === 'text' ? 'Text' : it.type === 'print' ? 'Polaroid' : 'Photo') + ' ' + (i + 1);
+      if (b.x0 < p.pw && b.x1 > p.pw - p.gut + eps && (it.type !== 'text' || true) && b.x0 < p.pw + p.gut - eps && b.x1 > p.pw - p.gut + eps) out.push(`${name} is over the fold. Move faces and text away from the middle.`);
+      const page = it.cx < p.pw ? [p.safe, p.pw - p.gut] : [p.pw + p.gut, 2 * p.pw - p.safe];
+      if (b.x0 < page[0] - eps || b.x1 > page[1] + eps || b.y0 < p.safe - eps || b.y1 > p.ph - p.safe + eps) out.push(`${name} goes past the safe line.`);
+      const img = imgs.get(it.imgId);
+      if (img && it.type !== 'text'){ const w = windowOf(it), dpi = Math.min(img.w / w.w, img.h / w.h) / it.zoom; if (dpi < 200) out.push(`${name}: the picture is small for this size (about ${Math.round(dpi)} dpi). It may look soft in print.`); }
+    });
+    const ul = $('warns'); ul.innerHTML = '';
+    if (!out.length){ const li = document.createElement('li'); li.className = 'ok'; li.textContent = items.length ? 'Nothing to fix.' : 'Start from a layout, or add a photo box.'; ul.appendChild(li); }
+    out.slice(0, 12).forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+  }
+  function sizeRows(){
+    return items.map((it, i) => ({ it, i })).filter(r => r.it.type !== 'text').map(({ it, i }) => {
+      const w = windowOf(it), tag = (it.type === 'print' ? 'Polaroid ' : 'Photo ') + (i + 1);
+      return { tag, w: N(w.w), h: N(w.h), px: `${Math.round(w.w * 300)} x ${Math.round(w.h * 300)}`, cx: N(it.cx), cy: N(it.cy), rot: N(it.rot) };
+    });
+  }
+  function sizes(){ /* the list is built on demand by Copy the sizes */ }
+
+  /* ---------- layouts ---------- */
+  function rng(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  let seed = 1;
+  function template(kind){
+    snapshot(); items = []; sel = null; const p = P();
+    if (kind === 'table'){
+      const rnd = rng(seed++ * 7919), n = 12;
+      [0, 1].forEach(pi => {
+        const x0 = pi ? p.pw + p.gut : p.safe, aw = p.pw - p.safe - p.gut, ah = p.ph - 2 * p.safe, rows = 3, cols = 2, cw = aw / cols, ch = ah / rows;
+        const h = Math.min(ch * 0.9, cw * 86 / 54 * 0.9);
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){
+          const a = (rnd() * 2 - 1) * 6;
+          const it = add('print', { h: N(h), rot: N(a), cx: N(x0 + cw * (c + 0.5) + (rnd() - 0.5) * cw * 0.1), cy: N(p.safe + ch * (r + 0.5) + (rnd() - 0.5) * ch * 0.1), warm: rnd() < 0.35 });
+          const b = bounds(it);                           // keep the tilted print inside its page's safe area
+          if (b.x0 < x0) it.cx = N(it.cx + x0 - b.x0); if (b.x1 > x0 + aw) it.cx = N(it.cx - (b.x1 - x0 - aw));
+          if (b.y0 < p.safe) it.cy = N(it.cy + p.safe - b.y0); if (b.y1 > p.ph - p.safe) it.cy = N(it.cy - (b.y1 - p.ph + p.safe));
+        }
+      });
+      $('bg').value = 'cork';
+    } else if (kind === 'hero'){
+      const aw = p.pw - p.safe - p.gut, ah = p.ph - 2 * p.safe, g = 0.2;
+      add('photo', { w: N(aw), h: N(ah * 0.55), cx: N(p.safe + aw / 2), cy: N(p.safe + ah * 0.275) });
+      add('text', { w: N(aw), h: 0.8, cx: N(p.pw + p.gut + aw / 2), cy: N(p.safe + 0.4), text: 'Back to School', size: 40 });
+      const sw = (aw - g) / 2, sh = (ah * 0.45 - g * 2) / 2;
+      [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([c, r]) => add('photo', { w: N(sw), h: N(sh), cx: N(p.safe + sw / 2 + c * (sw + g)), cy: N(p.safe + ah * 0.55 + g + sh / 2 + r * (sh + g)) }));
+      const tw = (aw - g * 2) / 3;
+      for (let i = 0; i < 3; i++) add('photo', { w: N(tw), h: N(ah * 0.5), cx: N(p.pw + p.gut + tw / 2 + i * (tw + g)), cy: N(p.safe + 1.2 + ah * 0.25) });
+      add('text', { w: N(aw), h: 1.2, cx: N(p.pw + p.gut + aw / 2), cy: N(p.ph - p.safe - 0.8), text: 'Write a short caption here.', size: 14, bold: false, align: 'left' });
+      $('bg').value = 'paper';
+    }
+    refresh();
+  }
+
+  /* ---------- export and files ---------- */
+  function download(blob, name){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+  function exportPicture(frames){
+    const p = P(), dpi = +$('dpi').value, part = $('part').value;
+    const x0 = part === 'right' ? p.pw : 0, wIn = part === 'spread' ? 2 * p.pw : p.pw;
+    const c = document.createElement('canvas'); c.width = Math.round(wIn * dpi); c.height = Math.round(p.ph * dpi);
+    const x = c.getContext('2d'); x.translate(-x0 * dpi, 0);
+    if (frames) drawPage(x, dpi, { frames: true }); else drawPage(x, dpi);
+    c.toBlob(b => download(b, `${frames ? 'frames' : 'page'}-${part}-${c.width}x${c.height}.png`), 'image/png');
+  }
+  function sizesText(){
+    return sizeRows().map(r => `${r.tag}: ${r.w.toFixed(2)} x ${r.h.toFixed(2)} in (${r.px} px at 300 dpi), centered ${r.cx.toFixed(2)} across and ${r.cy.toFixed(2)} down, tilt ${r.rot} degrees`).join('\n');
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify({ items, page: P(), bg: $('bg').value })); } catch (e) { /* not remembered */ } }
+  function load(txt){
+    const s = JSON.parse(txt); items = (s.items || []).map(i => Object.assign({}, i, { imgId: 0 }));
+    if (s.page){ $('pw').value = s.page.pw; $('ph').value = s.page.ph; $('safe').value = s.page.safe; $('gut').value = s.page.gut; }
+    if (s.bg) $('bg').value = s.bg; nextId = Math.max(0, ...items.map(i => i.id)) + 1; sel = null; refresh();
+  }
+
+  function refresh(full){ render(); if (full !== false){ panel(); warnings(); } }
+
+  /* ---------- wiring ---------- */
+  $('addPhoto').addEventListener('click', () => { snapshot(); sel = add('photo', { w: 3, h: 3.6 }).id; refresh(); });
+  $('addPrint').addEventListener('click', () => { snapshot(); sel = add('print').id; refresh(); });
+  $('addText').addEventListener('click', () => { snapshot(); sel = add('text').id; refresh(); });
+  $('loadPhotos').addEventListener('click', () => { pickFor = null; $('files').click(); });
+  $('files').addEventListener('change', e => { const t = pickFor; pickFor = null; loadFiles(e.target.files, t); e.target.value = ''; });
+  $('tpl').addEventListener('change', e => { if (e.target.value) template(e.target.value); e.target.value = ''; });
+  $('undo').addEventListener('click', undo);
+  $('expFlat').addEventListener('click', () => exportPicture(false));
+  $('expFrames').addEventListener('click', () => exportPicture(true));
+  $('copySizes').addEventListener('click', async () => { try { await navigator.clipboard.writeText(sizesText()); msg('Sizes copied.'); } catch (e) { msg('Could not copy. Select and copy from the list.'); } });
+  $('saveJson').addEventListener('click', () => download(new Blob([JSON.stringify({ items, page: P(), bg: $('bg').value }, null, 1)], { type: 'application/json' }), 'yearbook-page.json'));
+  $('openJson').addEventListener('click', () => $('jsonFile').click());
+  $('jsonFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f){ snapshot(); load(await f.text()); msg('Project opened. Load the photos again.'); } e.target.value = ''; });
+  ['pw', 'ph', 'safe', 'gut', 'bg', 'guides'].forEach(id => $(id).addEventListener('input', () => { refresh(); save(); }));
+  window.addEventListener('resize', () => refresh(false));
+
+  try { const s = localStorage.getItem(KEY); if (s) load(s); } catch (e) { /* start fresh */ }
+  if (!items.length) template('table');
+  history = [];
+  refresh();
+  window.yearbookDesigner = { get items(){ return items; }, add, template, sizesText, warnings, drawPage, P, windowOf, dims, loadFiles, readImage, imgs, select: id => { sel = id; refresh(); }, refresh };
+})();
+</script>
+</body>
+</html>
