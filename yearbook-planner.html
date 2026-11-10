@@ -40,11 +40,14 @@ th{color:var(--muted);font-weight:600;font-size:12px}
   <label>Safe margin (in)<input id="safe" type="number" step="0.0625" value="0.375" min="0.1" max="1"></label>
   <label>Keep clear at the fold (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0.1" max="1.5"></label>
   <label>Filmstrip<select id="mode" style="width:190px"><option value="table" selected>A table full of Polaroids</option><option value="wind">Winds across the spread</option><option value="wrap">Wraps around in an O</option><option value="straight">Straight, along the bottom</option></select></label>
+  <label data-m="table">Picture size<select id="dpi"><option value="150" selected>150 dpi (2550 x 1650)</option><option value="300">300 dpi (5100 x 3300)</option></select></label>
   <label data-m="table">Prints<input id="tn" type="number" min="4" max="30" value="14"></label>
   <label data-m="table">Film<select id="tf" style="width:150px"><option value="square">Instax square</option><option value="mini">Instax mini</option><option value="classic">Polaroid classic</option></select></label>
   <label data-m="table">Tilt (degrees)<input id="tt" type="number" min="0" max="25" value="8"></label>
   <label data-m="table">Overlap<select id="to"><option value="0">None</option><option value="0.2" selected>Some</option><option value="0.4">Lots</option></select></label>
   <button data-m="table" id="shuffle" type="button">Shuffle</button>
+  <button data-m="table" id="boxesPng" class="primary" type="button">Download the boxes picture</button>
+  <button data-m="table" id="cutPng" type="button">Download the frame cutout</button>
   <label data-m="wind">Frames on the strip<select id="nw"><option>0</option><option>2</option><option>4</option><option selected>6</option><option>8</option><option>10</option></select></label>
   <label data-m="straight">Frames per page<select id="nf"><option>3</option><option selected>4</option><option>5</option></select></label>
   <label data-m="wrap">Bottom frames per page<select id="nb"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option></select></label>
@@ -443,6 +446,45 @@ th{color:var(--muted);font-weight:600;font-size:12px}
     }));
   }
 
+  /* pictures of the table layout, drawn on a canvas at the page's real size */
+  function tablePicture(kind, dpi){
+    const L = layout(); if (L.mode !== 'table') return null;
+    const k = dpi, c = document.createElement('canvas');
+    c.width = Math.round(2 * L.W * k); c.height = Math.round(L.H * k);
+    const x = c.getContext('2d');
+    if (kind === 'cut'){ x.fillStyle = '#6b4f3a'; x.fillRect(0, 0, c.width, c.height); }
+    L.out.forEach(b => {
+      x.save(); x.translate(b.cx * k, b.cy * k); x.rotate(b.a * Math.PI / 180);
+      const px = -b.pw / 2 * k, py = -b.ph / 2 * k, wx = px + b.wx * k, wy = py + b.wy * k;
+      if (kind === 'cut'){
+        x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 0.08 * k; x.shadowOffsetY = 0.03 * k;
+        x.fillStyle = b.warm ? '#f4ecd9' : '#f6f4ee';
+        x.beginPath(); x.rect(px, py, b.pw * k, b.ph * k); x.rect(wx, wy, b.ww * k, b.wh * k); x.fill('evenodd');   // the window is a hole
+      } else {
+        x.strokeStyle = 'rgba(120,120,120,.9)'; x.lineWidth = Math.max(2, 0.015 * k); x.strokeRect(px, py, b.pw * k, b.ph * k);
+        x.fillStyle = 'rgba(46,204,135,.35)'; x.fillRect(wx, wy, b.ww * k, b.wh * k);
+        x.strokeStyle = '#1b8f5d'; x.lineWidth = Math.max(3, 0.02 * k); x.strokeRect(wx, wy, b.ww * k, b.wh * k);
+        x.fillStyle = '#0b3d28'; x.font = `700 ${Math.round(Math.min(b.ww, b.wh) * k * 0.3)}px system-ui,sans-serif`;
+        x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(b.id.replace('Print ', ''), wx + b.ww * k / 2, wy + b.wh * k / 2);
+      }
+      x.restore();
+    });
+    if (kind === 'cut'){                                 // punch every photo window through the table so it is see-through
+      x.globalCompositeOperation = 'destination-out'; x.shadowColor = 'transparent'; x.shadowBlur = 0; x.fillStyle = '#000';
+      L.out.forEach(b => {
+        x.save(); x.translate(b.cx * k, b.cy * k); x.rotate(b.a * Math.PI / 180);
+        x.fillRect((-b.pw / 2 + b.wx) * k, (-b.ph / 2 + b.wy) * k, b.ww * k, b.wh * k);
+        x.restore();
+      });
+      x.globalCompositeOperation = 'source-over';
+    }
+    return c;
+  }
+  function savePicture(kind){
+    const dpi = +$('dpi').value || 150, c = tablePicture(kind, dpi); if (!c) return;
+    c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `polaroid-${kind === 'cut' ? 'frame-cutout' : 'boxes'}-${c.width}x${c.height}.png`; document.body.appendChild(a); a.click(); a.remove(); }, 'image/png');
+  }
+
   function sizesText(){
     return boxes.map(b => `${b.id}: ${b.w.toFixed(2)} x ${b.h.toFixed(2)} in, at ${b.x.toFixed(2)} in across and ${b.y.toFixed(2)} in down`).join('\n');
   }
@@ -468,13 +510,15 @@ th{color:var(--muted);font-weight:600;font-size:12px}
   $('print').addEventListener('click', () => window.print());
   $('strip').addEventListener('click', downloadStrip);
   $('shuffle').addEventListener('click', () => { seed++; draw(); });
+  $('boxesPng').addEventListener('click', () => savePicture('boxes'));
+  $('cutPng').addEventListener('click', () => savePicture('cut'));
   $('copy').addEventListener('click', async () => {
     const b = $('copy');
     try { await navigator.clipboard.writeText(sizesText()); b.textContent = 'Copied'; }
     catch (e) { b.textContent = 'Could not copy'; }
     setTimeout(() => { b.textContent = 'Copy the sizes'; }, 1500);
   });
-  window.yearbookPlanner = { layout, sizesText, visible };
+  window.yearbookPlanner = { layout, sizesText, visible, tablePicture };
   draw();
 })();
 </script>
