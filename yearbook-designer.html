@@ -3,83 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Lay out a yearbook spread with Polaroid prints, photos and text on your own computer, then export the page or just the frames.">
 <title>Yearbook Designer</title>
 <style>
-:root{--bg:#111110;--bar:#1c1c1a;--line:#2e2d2a;--text:#f0ede8;--muted:#8a8880;--ink:#111110;--keep:#2ecc87;--grade:#e0b84a;--edit:#6b9ff0;--reject:#e05555}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,Segoe UI,sans-serif}
-header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--bar);border-bottom:1px solid var(--line)}
-header h1{font-size:18px;margin:0 8px 0 0}
-button,select,input,textarea{font:inherit}
-button{background:var(--bar);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px}
-button:hover{border-color:var(--muted)}
-button.primary{background:var(--keep);color:var(--ink);border-color:var(--keep);font-weight:700}
-button:disabled{opacity:.45;cursor:default}
-select,input[type=number],input[type=text],textarea{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
-.sp{flex:1}
-main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;padding:12px 14px}
-@media(max-width:960px){main{grid-template-columns:minmax(0,1fr)}}
-#stageWrap{background:#0b0b0a;border:1px solid var(--line);border-radius:12px;padding:8px}
-#cv{display:block;width:100%;height:auto;touch-action:none;cursor:default;border-radius:6px}
-aside{background:var(--bar);border:1px solid var(--line);border-radius:12px;padding:10px 12px;align-self:start}
-aside h2{font-size:13px;margin:12px 0 6px;color:var(--muted);font-weight:600;text-transform:none}
-aside h2:first-child{margin-top:0}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
-.grid2 label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
-.grid2 input,.grid2 select{width:100%}
-.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
-textarea{width:100%;height:70px}
-#warns{margin:10px 0 0;padding:0;list-style:none;font-size:13px}
-#warns li{color:var(--grade);margin:3px 0}
-#warns li.ok{color:var(--muted)}
-#msg{color:var(--grade);min-height:1.3em;font-size:13px;margin:6px 2px}
-.note{color:var(--muted);font-size:12px;margin:8px 0 0}
-#sizes{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
-#sizes td,#sizes th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:left}
-#sizes th{color:var(--muted);font-weight:600}
+/* Hallmark · shape: app screen · genre: playful · theme: custom · redesign: full
+ * paper: oklch(27% 0.022 55) · accent: oklch(82% 0.15 80) · display: system humanist sans · body: system humanist sans
+ * nav: a top bar on the desk · signature: the board in its own film frame, the print's bottom strip holding the status and the warnings · states: default, hover, focus, active, disabled, selected
+ * axes: dark/grotesk-sans/chromatic-amber · posture: dark desk, light film margins · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V3 · weakest: V, one tool so no log to differ from; kept the accent to the primary action and the selection only */
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.125rem; --text-xl: 1.265rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms; --dur-short: 220ms;
+  --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
+  --color-paper: oklch(27% 0.022 55);        /* the desk */
+  --color-paper-2: oklch(93% 0.008 250);     /* the film margin: panels and the board frame */
+  --color-paper-3: oklch(89% 0.012 250);     /* the strip along the bottom of a print */
+  --color-field: oklch(98% 0.004 250);       /* inputs sit a step lighter than the margin */
+  --color-ink: oklch(26% 0.025 255);
+  --color-ink-2: oklch(38% 0.025 255);
+  --color-muted: oklch(48% 0.02 255);
+  --color-rule: oklch(80% 0.012 250);
+  --color-desk-ink: oklch(93% 0.008 250);    /* text sitting directly on the desk */
+  --color-desk-rule: oklch(40% 0.02 55);
+  --color-accent: oklch(82% 0.15 80); --color-accent-ink: oklch(24% 0.03 70);
+  --color-focus: oklch(48% 0.2 258); --color-focus-desk: oklch(86% 0.13 90);
+  --color-warn: oklch(46% 0.12 60);
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Avenir Next", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-outlier: var(--font-body);
+  --radius-card: 6px; --radius-ctl: 6px; --radius-frame: 12px; --rule-hair: 1px;
+  --shadow-card: 0 2px 6px color-mix(in oklab, var(--color-ink) 35%, transparent);
+  --tracking-display: -0.01em;
+  --ctl: 2.25rem;                             /* control height, 36px */
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html { scrollbar-color: var(--color-muted) var(--color-paper); }
+body { margin: 0; background: var(--color-paper); color: var(--color-desk-ink); font-family: var(--font-body); font-size: var(--text-md); line-height: 1.45; -webkit-font-smoothing: antialiased; color-scheme: dark; }
+::selection { background: color-mix(in oklab, var(--color-accent) 30%, transparent); }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.bar :focus-visible { outline-color: var(--color-focus-desk); }
+h1, h2 { margin: 0; font-family: var(--font-display); font-synthesis: none; overflow-wrap: break-word; min-width: 0; text-wrap: balance; letter-spacing: var(--tracking-display); }
+p { margin: 0; text-wrap: pretty; }
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
+
+/* the top bar sits on the desk */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-sm); padding: var(--space-sm) var(--space-md); border-bottom: var(--rule-hair) solid var(--color-desk-rule); }
+.bar h1 { font-size: var(--text-lg); font-weight: 650; margin-right: var(--space-sm); color: var(--color-desk-ink); }
+.bar .group { display: flex; gap: var(--space-2xs); padding-right: var(--space-sm); border-right: var(--rule-hair) solid var(--color-desk-rule); }
+.sp { flex: 1; }
+
+/* controls: one height, one radius */
+button, select, input[type="number"], input[type="text"], textarea { min-height: var(--ctl); border-radius: var(--radius-ctl); }
+button { position: relative; padding: var(--space-2xs) var(--space-sm); font-size: var(--text-sm); font-weight: 550; white-space: nowrap; cursor: pointer; background: var(--color-paper-2); color: var(--color-ink); border: var(--rule-hair) solid var(--color-paper-2); transition: background-color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out); }
+button::after { content: ""; position: absolute; inset: -4px; }                  /* a 44px hit target around a 36px control */
+button:hover { background: var(--color-paper-3); border-color: var(--color-rule); }
+button:active { transform: translateY(1px); background: var(--color-rule); }
+button:disabled { cursor: not-allowed; background: var(--color-paper-3); color: var(--color-muted); border-color: var(--color-rule); }
+button.primary { background: var(--color-accent); color: var(--color-accent-ink); border-color: var(--color-accent); font-weight: 700; }
+button.primary:hover { background: color-mix(in oklab, var(--color-accent) 88%, var(--color-paper-2)); border-color: var(--color-accent); }
+button.primary:active { background: color-mix(in oklab, var(--color-accent) 76%, var(--color-ink)); }
+.panel button { background: transparent; border-color: var(--color-muted); }
+.panel button:hover { background: var(--color-paper-3); }
+.panel button:active { background: var(--color-rule); }
+.panel button:disabled { background: var(--color-paper-3); border-color: var(--color-rule); }
+input, textarea { caret-color: var(--color-ink); }
+select, input[type="number"], input[type="text"], textarea { background: var(--color-field); color: var(--color-ink); border: var(--rule-hair) solid var(--color-muted); padding: var(--space-2xs) var(--space-xs); }
+.bar select { background: var(--color-paper-2); border-color: var(--color-paper-2); }
+select:hover, input:hover, textarea:hover { border-color: var(--color-ink-2); }
+select:disabled, input:disabled, textarea:disabled { cursor: not-allowed; background: var(--color-paper-3); color: var(--color-muted); border-color: var(--color-rule); }
+textarea { min-height: 72px; width: 100%; resize: vertical; }
+input[type="range"] { width: 100%; accent-color: var(--color-ink); }
+input[type="color"] { width: 100%; min-height: var(--ctl); padding: var(--space-2xs); background: var(--color-field); border: var(--rule-hair) solid var(--color-muted); border-radius: var(--radius-ctl); }
+
+/* the shell: the board and the panel */
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-md); padding: var(--space-md); align-items: start; }
+@media (max-width: 60rem) { .shell { grid-template-columns: minmax(0, 1fr); } }
+
+/* the board in its own film frame: a margin all round, and a bottom strip like the one on a print */
+.film { background: var(--color-paper-2); color: var(--color-ink); border-radius: var(--radius-frame); padding: var(--space-md) var(--space-md) 0; box-shadow: var(--shadow-card); }
+#cv { display: block; width: 100%; height: auto; touch-action: none; cursor: default; border-radius: 2px; box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); }
+.chin { margin: var(--space-md) calc(-1 * var(--space-md)) 0; padding: var(--space-sm) var(--space-md) var(--space-md); background: var(--color-paper-3); border-top: var(--rule-hair) solid var(--color-rule); border-radius: 0 0 var(--radius-frame) var(--radius-frame); min-height: 88px; }
+#msg { min-height: 1.4em; font-size: var(--text-sm); color: var(--color-ink-2); }
+#warns { margin: var(--space-2xs) 0 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+#warns li { margin: var(--space-3xs) 0; color: var(--color-warn); }
+#warns li.ok { color: var(--color-muted); }
+
+/* the panel: a second film margin */
+.panel { background: var(--color-paper-2); color: var(--color-ink); border-radius: var(--radius-frame); padding: var(--space-md); box-shadow: var(--shadow-card); }
+.panel h2 { font-size: var(--text-md); font-weight: 650; margin: var(--space-md) 0 var(--space-xs); padding-top: var(--space-sm); border-top: var(--rule-hair) solid var(--color-rule); }
+.panel h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-xs) var(--space-sm); }
+.grid2 label, .panel label { display: flex; flex-direction: column; gap: var(--space-2xs); font-size: var(--text-sm); color: var(--color-ink-2); }
+.grid2 input, .grid2 select { width: 100%; }
+.row { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: var(--space-sm) 0 0; }
+.note { color: var(--color-ink-2); font-size: var(--text-sm); margin: var(--space-sm) 0 0; }
+.note[style] { display: block; }
 </style>
 </head>
 <body>
-<header>
+<header class="bar">
   <h1>Yearbook Designer</h1>
-  <button id="addPhoto" type="button">+ Photo</button>
-  <button id="addPrint" type="button">+ Polaroid</button>
-  <button id="addText" type="button">+ Text</button>
+  <div class="group" role="group" aria-label="Add to the page">
+    <button id="addPhoto" type="button">Photo box</button>
+    <button id="addPrint" type="button">Polaroid</button>
+    <button id="addText" type="button">Text</button>
+  </div>
   <button id="loadPhotos" class="primary" type="button">Load photos</button>
   <input id="files" type="file" accept="image/*" multiple hidden>
-  <select id="tpl" title="Start from a layout"><option value="">Start from…</option><option value="blank">Blank page</option><option value="table">Polaroid table</option><option value="hero">Big photo and small ones</option></select>
+  <select id="tpl" aria-label="Start from a layout"><option value="">Start from a layout</option><option value="blank">Blank page</option><option value="table">Polaroid table</option><option value="hero">Big photo and small ones</option></select>
   <span class="sp"></span>
   <button id="undo" type="button">Undo</button>
   <button id="saveJson" type="button">Save project</button>
   <button id="openJson" type="button">Open project</button>
   <input id="jsonFile" type="file" accept="application/json,.json" hidden>
 </header>
-<main>
-  <div>
-    <div id="stageWrap"><canvas id="cv" width="1500" height="1000"></canvas></div>
-    <div id="msg"></div>
-    <ul id="warns"></ul>
-  </div>
-  <aside>
+<main class="shell">
+  <section aria-label="The spread">
+    <div id="stageWrap" class="film">
+      <canvas id="cv" width="1500" height="1000" role="img" aria-label="The yearbook spread: two pages side by side. Click an item to select it."></canvas>
+      <div class="chin">
+        <p id="msg" role="status"></p>
+        <ul id="warns" aria-label="Things to check"></ul>
+      </div>
+    </div>
+  </section>
+  <aside class="panel" aria-label="Page settings and selected item">
     <h2>Page</h2>
     <div class="grid2">
       <label>Page width (in)<input id="pw" type="number" step="0.125" value="7.5" min="3" max="14"></label>
       <label>Page height (in)<input id="ph" type="number" step="0.125" value="11" min="3" max="17"></label>
       <label>Safe margin (in)<input id="safe" type="number" step="0.0625" value="0.375" min="0" max="1"></label>
-      <label>Keep clear at fold (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0" max="1.5"></label>
+      <label>Fold gap (in)<input id="gut" type="number" step="0.0625" value="0.5" min="0" max="1.5"></label>
       <label>Background<select id="bg"><option value="cork">Cork</option><option value="paper">Paper</option><option value="white">White</option><option value="dark">Dark</option></select></label>
       <label>Safe lines<select id="guides"><option value="1">Show</option><option value="0">Hide</option></select></label>
     </div>
     <h2>Selected</h2>
-    <div id="sel"><div class="note">Click something on the page. Drag it to move. Drag a corner to resize. Drag the dot above it to tilt.</div></div>
+    <div id="sel"><p class="note">Click something on the page. Drag it to move. Drag a corner to resize. Drag the dot above it to tilt.</p></div>
     <h2>Export</h2>
     <div class="grid2">
       <label>Part<select id="part"><option value="spread">Whole spread</option><option value="left">Left page</option><option value="right">Right page</option></select></label>
       <label>Quality<select id="dpi"><option value="150">150 dpi (draft)</option><option value="300">300 dpi (final)</option></select></label>
     </div>
     <div class="row">
-      <button id="expFlat" class="primary" type="button">Download the page picture</button>
-      <button id="expFrames" type="button">Download frames only</button>
+      <button id="expFlat" type="button">Page picture</button>
+      <button id="expFrames" type="button">Frames only</button>
       <button id="copySizes" type="button">Copy the sizes</button>
     </div>
     <p class="note">Photos stay on this computer. Nothing is uploaded. Save project keeps the layout but not the photos, so load them again when you open it.</p>
