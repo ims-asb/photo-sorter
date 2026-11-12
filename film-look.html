@@ -72,6 +72,10 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     <div id="sl-color"></div>
     <h2>Film feel</h2>
     <div id="sl-film"></div>
+    <h2>Clean up</h2>
+    <div id="sl-clean"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button id="degrain" type="button">Degrain</button><button id="deblur" type="button">Deblur</button><button id="cleanOff" type="button">Clean up off</button></div>
+    <p class="note">Degrain and Deblur are plain math, not AI. Deblur sharpens soft photos a little. It cannot rescue a photo that is truly out of focus or shaken. Slower on big photos when on.</p>
     <h2>Crop</h2>
     <button id="cropBtn" type="button" disabled>Crop this photo</button>
     <div id="cropCtl" hidden>
@@ -90,7 +94,7 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
   'use strict';
   const $ = id => document.getElementById(id);
   const KEY = 'filmlook:v1';
-  const DEF = { exposure: 0, contrast: 0, fade: 0, saturation: 1, warmth: 0, shadowHue: 200, shadowAmt: 0, highHue: 40, highAmt: 0, glow: 0, softness: 0, grain: 0, grainSize: 1.5, vignette: 0 };
+  const DEF = { exposure: 0, contrast: 0, fade: 0, saturation: 1, warmth: 0, shadowHue: 200, shadowAmt: 0, highHue: 40, highAmt: 0, glow: 0, softness: 0, grain: 0, grainSize: 1.5, vignette: 0, denoise: 0, denColor: 0, sharpen: 0, sharpSize: 1 };
   const SLIDERS = [
     ['sl-light', 'exposure', 'Brightness', -1, 2, 0.05, v => (v > 0 ? '+' : '') + v.toFixed(2)],
     ['sl-light', 'contrast', 'Contrast', -0.5, 0.6, 0.01, v => v.toFixed(2)],
@@ -105,7 +109,11 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     ['sl-film', 'softness', 'Soft focus', 0, 1, 0.01, v => v.toFixed(2)],
     ['sl-film', 'grain', 'Grain', 0, 1, 0.01, v => v.toFixed(2)],
     ['sl-film', 'grainSize', 'Grain size', 1, 4, 0.1, v => v.toFixed(1)],
-    ['sl-film', 'vignette', 'Dark corners', 0, 1, 0.01, v => v.toFixed(2)]
+    ['sl-film', 'vignette', 'Dark corners', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-clean', 'denoise', 'Smooth grain', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-clean', 'denColor', 'Smooth color specks', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-clean', 'sharpen', 'Sharpen / deblur', 0, 1, 0.01, v => v.toFixed(2)],
+    ['sl-clean', 'sharpSize', 'Sharpen size', 0.5, 3, 0.1, v => v.toFixed(1)]
   ];
   const P = (o) => Object.assign({}, DEF, o);
   const PRESETS = {
@@ -172,11 +180,113 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     const bx = big.getContext('2d'); bx.imageSmoothingEnabled = true; bx.drawImage(c, 0, 0, W, H);
     return bx.getImageData(0, 0, W, H).data;
   }
+  /* ---------- clean up: smooth grain, smooth color specks, sharpen (no AI, just filters) ---------- */
+  function boxBlur(a, W, H, r){                         // average over a square window, same size out
+    const t = new Float32Array(W * H), o = new Float32Array(W * H);
+    for (let y = 0; y < H; y++){
+      const row = y * W; let sum = 0; const lim = Math.min(r, W - 1);
+      for (let x = 0; x <= lim; x++) sum += a[row + x];
+      for (let x = 0; x < W; x++){
+        const lo = Math.max(0, x - r), hi = Math.min(W - 1, x + r);
+        t[row + x] = sum / (hi - lo + 1);
+        if (x + r + 1 < W) sum += a[row + x + r + 1];
+        if (x - r >= 0) sum -= a[row + x - r];
+      }
+    }
+    const acc = new Float64Array(W), lim = Math.min(r, H - 1);
+    for (let y = 0; y <= lim; y++){ const row = y * W; for (let x = 0; x < W; x++) acc[x] += t[row + x]; }
+    for (let y = 0; y < H; y++){
+      const lo = Math.max(0, y - r), hi = Math.min(H - 1, y + r), n = 1 / (hi - lo + 1), row = y * W;
+      for (let x = 0; x < W; x++) o[row + x] = acc[x] * n;
+      if (y + r + 1 < H){ const rr = (y + r + 1) * W; for (let x = 0; x < W; x++) acc[x] += t[rr + x]; }
+      if (y - r >= 0){ const rr = (y - r) * W; for (let x = 0; x < W; x++) acc[x] -= t[rr + x]; }
+    }
+    return o;
+  }
+  function down2(a, W, H){                             // half-size copy (2x2 average)
+    const w = (W + 1) >> 1, h = (H + 1) >> 1, o = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      const x1 = Math.min(W - 1, 2 * x + 1), y1 = Math.min(H - 1, 2 * y + 1);
+      o[y * w + x] = (a[2 * y * W + 2 * x] + a[2 * y * W + x1] + a[y1 * W + 2 * x] + a[y1 * W + x1]) / 4;
+    }
+    return o;
+  }
+  function up2(a, w, h, W, H){                          // back to full size, smooth
+    const o = new Float32Array(W * H), X0 = new Int32Array(W), X1 = new Int32Array(W), TX = new Float32Array(W);
+    for (let x = 0; x < W; x++){ const fx = Math.max(0, Math.min(w - 1, (x + 0.5) / 2 - 0.5)), x0 = Math.floor(fx); X0[x] = x0; X1[x] = Math.min(w - 1, x0 + 1); TX[x] = fx - x0; }
+    for (let y = 0; y < H; y++){
+      const fy = Math.max(0, Math.min(h - 1, (y + 0.5) / 2 - 0.5)), y0 = Math.floor(fy), y1 = Math.min(h - 1, y0 + 1), ty = fy - y0, r0 = y0 * w, r1 = y1 * w, ro = y * W;
+      for (let x = 0; x < W; x++){
+        const tx = TX[x], i0 = X0[x], i1 = X1[x];
+        o[ro + x] = (a[r0 + i0] * (1 - tx) + a[r0 + i1] * tx) * (1 - ty) + (a[r1 + i0] * (1 - tx) + a[r1 + i1] * tx) * ty;
+      }
+    }
+    return o;
+  }
+  function guidedFast(G, Gl, mI, varI, P, W, H, w, h, r, eps){   // edge-keeping smoothing of P, guided by brightness (fast guided filter: solved at half size)
+    const Pl = down2(P, W, H), n = w * h, mP = boxBlur(Pl, w, h, r), GP = new Float32Array(n);
+    for (let i = 0; i < n; i++) GP[i] = Gl[i] * Pl[i];
+    const mGP = boxBlur(GP, w, h, r), A = GP, B = new Float32Array(n);
+    for (let i = 0; i < n; i++){ const a = (mGP[i] - mI[i] * mP[i]) / (varI[i] + eps); A[i] = a; B[i] = mP[i] - a * mI[i]; }
+    const mA = up2(boxBlur(A, w, h, r), w, h, W, H), mB = up2(boxBlur(B, w, h, r), w, h, W, H);
+    for (let i = 0; i < W * H; i++) mB[i] = mA[i] * G[i] + mB[i];
+    return mB;
+  }
+  function cleanBand(src, dst, W, a, b, y0, y1, p, k){   // work on rows a..b of the photo, write back only rows y0..y1
+    const h = b - a, n = W * h, Y = new Float32Array(n), U = new Float32Array(n), V = new Float32Array(n);
+    for (let j = 0; j < n; j++){
+      const q = (a * W + j) * 4, r = src[q], g = src[q + 1], bl = src[q + 2], y = 0.299 * r + 0.587 * g + 0.114 * bl;
+      Y[j] = y; U[j] = bl - y; V[j] = r - y;
+    }
+    let G = Y;                                           // Y after smoothing
+    const rl = Math.max(1, Math.round((1.5 + 2 * p.denoise) * k)), rc = Math.max(1, Math.round((3 + 5 * p.denColor) * k));
+    if (p.denoise > 0){
+      const mI = boxBlur(Y, W, h, rl), Y2 = new Float32Array(n);
+      for (let j = 0; j < n; j++) Y2[j] = Y[j] * Y[j];
+      const mII = boxBlur(Y2, W, h, rl), eps = Math.pow(p.denoise * 28, 2);
+      for (let j = 0; j < n; j++){ const v = mII[j] - mI[j] * mI[j], aa = v / (v + eps); Y2[j] = aa; mII[j] = (1 - aa) * mI[j]; }
+      const mA = boxBlur(Y2, W, h, rl), mB = boxBlur(mII, W, h, rl);
+      G = new Float32Array(n); for (let j = 0; j < n; j++) G[j] = mA[j] * Y[j] + mB[j];
+    }
+    let Uo = U, Vo = V;
+    if (p.denColor > 0){
+      const w = (W + 1) >> 1, hh = (h + 1) >> 1, rr = Math.max(1, Math.round(rc / 2)), Gl = down2(G, W, h);
+      const mI = boxBlur(Gl, w, hh, rr), G2 = new Float32Array(w * hh);
+      for (let j = 0; j < G2.length; j++) G2[j] = Gl[j] * Gl[j];
+      const varI = boxBlur(G2, w, hh, rr); for (let j = 0; j < varI.length; j++) varI[j] = Math.max(0, varI[j] - mI[j] * mI[j]);
+      const eps = Math.pow(p.denColor * 45, 2);
+      Uo = guidedFast(G, Gl, mI, varI, U, W, h, w, hh, rr, eps); Vo = guidedFast(G, Gl, mI, varI, V, W, h, w, hh, rr, eps);
+    }
+    let S = G;
+    if (p.sharpen > 0){                                  // unsharp mask on brightness only, so colors do not get halos
+      const rs = Math.max(1, Math.round(1.5 * p.sharpSize * k)), amt = p.sharpen * 2.2;
+      let bl = boxBlur(G, W, h, rs); bl = boxBlur(bl, W, h, rs);
+      S = new Float32Array(n);
+      for (let j = 0; j < n; j++){ const d = G[j] - bl[j], ad = Math.abs(d); S[j] = G[j] + amt * d * ad / (ad + 2); }
+    }
+    for (let yy = y0; yy < y1; yy++){
+      for (let x = 0; x < W; x++){
+        const j = (yy - a) * W + x, q = (yy * W + x) * 4, y = S[j];
+        let r = y + Vo[j], bl = y + Uo[j], g = (y - 0.299 * r - 0.114 * bl) / 0.587;
+        dst[q] = r < 0 ? 0 : r > 255 ? 255 : r; dst[q + 1] = g < 0 ? 0 : g > 255 ? 255 : g; dst[q + 2] = bl < 0 ? 0 : bl > 255 ? 255 : bl;
+      }
+    }
+  }
+  function cleanup(data, W, H, p){
+    const k = Math.max(W, H) / 1400, src = new Uint8ClampedArray(data);
+    const rl = Math.round((1.5 + 2 * p.denoise) * k), rc = Math.round((3 + 5 * p.denColor) * k), rs = Math.round(1.5 * p.sharpSize * k) + 1;
+    const margin = 2 * Math.max(rl, rc) + 2 * rs + 6, STRIP = 400;
+    for (let y0 = 0; y0 < H; y0 += STRIP){
+      const y1 = Math.min(H, y0 + STRIP);
+      cleanBand(src, data, W, Math.max(0, y0 - margin), Math.min(H, y1 + margin), y0, y1, p, k);
+    }
+  }
   function render(src, W, H, p, seed){                  // src: any drawable, returns a canvas
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const x = c.getContext('2d', { willReadFrequently: true });
     x.drawImage(src, 0, 0, W, H);
     let id = x.getImageData(0, 0, W, H);
+    if (p.denoise > 0 || p.denColor > 0 || p.sharpen > 0) cleanup(id.data, W, H, p);
     tone(id.data, p); x.putImageData(id, 0, 0);
     if (p.glow > 0){                                    // a soft warm bloom around the bright parts
       const g = document.createElement('canvas'); g.width = W; g.height = H;
@@ -369,6 +479,10 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
       `  Shadows: hue ${p.shadowHue}, saturation ${Math.round(p.shadowAmt * 100)}`,
       `  Highlights: hue ${p.highHue}, saturation ${Math.round(p.highAmt * 100)}`,
       '',
+      'Detail (Camera Raw > Detail)',
+      `  Noise Reduction: Luminance ${Math.round(p.denoise * 60)}, Color ${Math.round(p.denColor * 70)}`,
+      `  Sharpening: Amount ${Math.round(p.sharpen * 90)}, Radius ${(0.6 + p.sharpSize * 0.6).toFixed(1)}`,
+      '',
       'Effects',
       `  Grain: amount ${Math.round(p.grain * 60)}, size ${Math.round(12 + p.grainSize * 10)}, roughness 50`,
       `  Vignette: amount ${f(-p.vignette * 35)}`,
@@ -385,6 +499,9 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
   $('all').addEventListener('click', saveAll);
   $('reset').addEventListener('click', () => setParams(DEF));
   $('recipe').addEventListener('click', recipe);
+  $('degrain').addEventListener('click', () => setParams(Object.assign({}, params, { denoise: 0.5, denColor: 0.6 })));
+  $('deblur').addEventListener('click', () => setParams(Object.assign({}, params, { sharpen: 0.55, sharpSize: 1.2 })));
+  $('cleanOff').addEventListener('click', () => setParams(Object.assign({}, params, { denoise: 0, denColor: 0, sharpen: 0 })));
   const cmp = on => { if (cur < 0) return; showOriginal = on; $('badge').style.display = on ? 'block' : 'none'; preview(); };
   $('compare').addEventListener('pointerdown', () => cmp(true));
   window.addEventListener('pointerup', () => { if (showOriginal) cmp(false); });
