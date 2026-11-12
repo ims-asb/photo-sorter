@@ -11,6 +11,8 @@ const ck = (l, c, x) => { console.log(c ? 'PASS' : 'FAIL', l, c ? '' : JSON.stri
   p.on('pageerror', e => errs.push(e.message));
   p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await p.goto('file:///home/user/photo-sorter/yearbook-designer.html');
+  // the tool panels are tabs; for this test show them all, then check the tabs separately below
+  await p.evaluate(() => document.querySelectorAll('[data-panel]').forEach(x => { x.hidden = false; }));
   await p.waitForTimeout(400);
   let n = await p.evaluate(() => window.yearbookDesigner.items.length);
   ck('starts with the Polaroid table (12 prints)', n === 12, n);
