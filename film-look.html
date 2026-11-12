@@ -17,7 +17,17 @@ button:disabled{opacity:.45;cursor:default}
 main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;padding:14px 16px;max-width:1300px;margin:0 auto}
 @media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
 #stage{background:#0b0b0a;border:1px solid var(--line);border-radius:12px;min-height:320px;display:grid;place-items:center;padding:8px;position:relative}
-#view{max-width:100%;max-height:68vh;display:block}
+#wrap{position:relative;display:inline-block;line-height:0;overflow:hidden;padding:12px;max-width:100%}
+#view{max-width:100%;max-height:calc(68vh - 24px);display:block}
+#ov{position:absolute;inset:12px;display:none}
+#wrap.cropping #ov{display:block}
+#crop{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;touch-action:none}
+#crop::before,#crop::after{content:"";position:absolute;pointer-events:none;border:0 solid rgba(255,255,255,.35)}
+#crop::before{left:33.33%;right:33.33%;top:0;bottom:0;border-left-width:1px;border-right-width:1px}
+#crop::after{top:33.33%;bottom:33.33%;left:0;right:0;border-top-width:1px;border-bottom-width:1px}
+#crop .h{position:absolute;width:18px;height:18px;background:#fff;border-radius:3px;touch-action:none}
+.h.nw{left:-9px;top:-9px;cursor:nwse-resize}.h.ne{right:-9px;top:-9px;cursor:nesw-resize}.h.sw{left:-9px;bottom:-9px;cursor:nesw-resize}.h.se{right:-9px;bottom:-9px;cursor:nwse-resize}
+select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px}
 #drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px;pointer-events:none}
 #drop b{color:var(--text);display:block;font-size:18px;margin-bottom:4px}
 #stage.over{border-color:var(--keep)}
@@ -49,7 +59,7 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
 </header>
 <main>
   <div>
-    <div id="stage"><canvas id="view" width="10" height="10" hidden></canvas><div id="drop"><div><b>Drop photos here</b>JPG, PNG, WebP. They stay on this computer. Nothing is uploaded.</div></div><div id="badge">Original</div></div>
+    <div id="stage"><div id="wrap"><canvas id="view" width="10" height="10" hidden></canvas><div id="ov"><div id="crop"><div class="h nw" data-c="nw"></div><div class="h ne" data-c="ne"></div><div class="h sw" data-c="sw"></div><div class="h se" data-c="se"></div></div></div></div><div id="drop"><div><b>Drop photos here</b>JPG, PNG, WebP. They stay on this computer. Nothing is uploaded.</div></div><div id="badge">Original</div></div>
     <div id="thumbs"></div>
     <div id="msg"></div>
   </div>
@@ -62,6 +72,13 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     <div id="sl-color"></div>
     <h2>Film feel</h2>
     <div id="sl-film"></div>
+    <h2>Crop</h2>
+    <button id="cropBtn" type="button" disabled>Crop this photo</button>
+    <div id="cropCtl" hidden>
+      <div style="display:flex;gap:6px;margin:8px 0"><select id="aspect" aria-label="Crop shape"></select><button id="flip" type="button">Turn sideways</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button id="cropReset" type="button">Undo crop</button><button id="cropAll" type="button">Same crop on all</button></div>
+      <p class="note" id="cropInfo"></p>
+    </div>
     <div style="margin-top:10px;display:flex;gap:6px"><button id="reset" type="button">Reset</button><button id="recipe" type="button">Photoshop settings</button></div>
     <p class="note">The same look is used on every photo, so a whole batch matches. Originals are never changed.</p>
     <textarea id="recipeBox" hidden readonly></textarea>
@@ -103,7 +120,7 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     'Rescue dark shots': P({ exposure: 1.3, contrast: 0.05, fade: 0.04, saturation: 1.05, warmth: 0.1, grain: 0, grainSize: 1.5, vignette: 0.1 })
   };
 
-  let params = Object.assign({}, DEF), items = [], cur = -1, showOriginal = false;
+  let params = Object.assign({}, DEF), items = [], cur = -1, showOriginal = false, cropMode = false, aspIdx = 0, flipped = false;
 
   /* ---------- the look, applied to an ImageData ---------- */
   function hueRGB(h){ const x = h / 60, c = 1, k = 1 - Math.abs(x % 2 - 1); const r = [[c, k, 0], [k, c, 0], [0, c, k], [0, k, c], [k, 0, c], [c, 0, k]][Math.floor(x) % 6]; return r; }
@@ -203,22 +220,87 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
     for (const [, key, , , , , fmt] of SLIDERS){ $('r-' + key).value = params[key]; $('o-' + key).textContent = fmt(params[key]); }
     save(); preview();
   }
+  // ---- crop: each photo keeps its own box (as fractions of the photo); the box is applied when you view or save
+  const ASPECTS = [['Free', 0], ['Same as photo', -1], ['Square 1:1', 1], ['4:5', 4 / 5], ['3:2', 3 / 2], ['16:9', 16 / 9], ['Instax mini 46:62', 46 / 62], ['Instax wide 99:62', 99 / 62]];
+  function cropDims(it){ const c = it.crop; return c ? [Math.max(1, Math.round(c.w * it.bmp.width)), Math.max(1, Math.round(c.h * it.bmp.height))] : [it.bmp.width, it.bmp.height]; }
+  function cropTo(it, W, H){
+    if (!it.crop) return it.bmp;
+    const c = it.crop, bw = it.bmp.width, bh = it.bmp.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    cv.getContext('2d').drawImage(it.bmp, c.x * bw, c.y * bh, c.w * bw, c.h * bh, 0, 0, W, H); return cv;
+  }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const curBox = () => items[cur].crop || { x: 0, y: 0, w: 1, h: 1 };
+  function aspectVal(){
+    const it = items[cur], a = ASPECTS[aspIdx][1]; if (!a) return 0;
+    const v = a < 0 ? it.bmp.width / it.bmp.height : a; return flipped ? 1 / v : v;
+  }
+  function setBox(b){
+    const it = items[cur];
+    it.crop = (b.w > 0.995 && b.h > 0.995) ? null : { x: b.x, y: b.y, w: b.w, h: b.h };
+    drawBox();
+  }
+  function drawBox(){
+    const el = $('crop'); if (!cropMode || cur < 0){ return; }
+    const b = curBox(), it = items[cur];
+    el.style.left = b.x * 100 + '%'; el.style.top = b.y * 100 + '%'; el.style.width = b.w * 100 + '%'; el.style.height = b.h * 100 + '%';
+    $('cropInfo').textContent = 'Result: ' + Math.round(b.w * it.bmp.width) + ' x ' + Math.round(b.h * it.bmp.height) + ' pixels. Drag the box to move it, drag a corner to resize.';
+  }
+  function fitAspect(){
+    const a = aspectVal(); if (!a || cur < 0) return;
+    const it = items[cur], k = it.bmp.width / it.bmp.height, c = curBox();
+    let w = 1, h = k / a; if (h > 1){ h = 1; w = a / k; }
+    setBox({ x: clamp(c.x + c.w / 2 - w / 2, 0, 1 - w), y: clamp(c.y + c.h / 2 - h / 2, 0, 1 - h), w, h });
+  }
+  function setCropMode(on){
+    cropMode = on && cur >= 0; $('wrap').classList.toggle('cropping', cropMode);
+    $('cropCtl').hidden = !cropMode; $('cropBtn').textContent = cropMode ? 'Done cropping' : 'Crop this photo';
+    preview(); drawBox();
+  }
+  let drag = null;
+  function ovPos(e){ const r = $('ov').getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+  $('crop').addEventListener('pointerdown', e => {
+    if (!cropMode) return; e.preventDefault(); e.target.setPointerCapture(e.pointerId);
+    const b = curBox(), [px, py] = ovPos(e), h = e.target.dataset.c;
+    if (h) drag = { type: 'h', ax: h.includes('w') ? b.x + b.w : b.x, ay: h.includes('n') ? b.y + b.h : b.y };
+    else drag = { type: 'm', dx: px - b.x, dy: py - b.y };
+  });
+  $('crop').addEventListener('pointermove', e => {
+    if (!drag || !cropMode) return;
+    const [rx, ry] = ovPos(e), px = clamp(rx, 0, 1), py = clamp(ry, 0, 1), b = curBox();
+    if (drag.type === 'm'){ setBox({ x: clamp(px - drag.dx, 0, 1 - b.w), y: clamp(py - drag.dy, 0, 1 - b.h), w: b.w, h: b.h }); return; }
+    const it = items[cur], k = it.bmp.width / it.bmp.height, a = aspectVal(), MIN = 0.03;
+    let w = Math.max(MIN, Math.abs(px - drag.ax)), h = Math.max(MIN, Math.abs(py - drag.ay));
+    if (a){ h = w * k / a; if (h > Math.abs(py - drag.ay) && Math.abs(py - drag.ay) > MIN){ h = Math.abs(py - drag.ay); w = h * a / k; } }
+    const x = px >= drag.ax ? drag.ax : drag.ax - w, y = py >= drag.ay ? drag.ay : drag.ay - h;
+    setBox({ x: clamp(x, 0, 1 - w), y: clamp(y, 0, 1 - h), w: Math.min(w, 1), h: Math.min(h, 1) });
+  });
+  const endDrag = () => { drag = null; };
+  $('crop').addEventListener('pointerup', endDrag); $('crop').addEventListener('pointercancel', endDrag);
+  for (const [name] of ASPECTS){ const o = document.createElement('option'); o.textContent = name; $('aspect').appendChild(o); }
+  $('aspect').addEventListener('change', () => { aspIdx = $('aspect').selectedIndex; flipped = false; fitAspect(); });
+  $('flip').addEventListener('click', () => { flipped = !flipped; fitAspect(); });
+  $('cropReset').addEventListener('click', () => { if (cur >= 0){ items[cur].crop = null; drawBox(); } });
+  $('cropAll').addEventListener('click', () => { if (cur < 0) return; const b = items[cur].crop; for (const it of items) it.crop = b ? Object.assign({}, b) : null; msg(b ? 'That crop is now on all ' + items.length + ' photos.' : 'Crops cleared on all photos.'); });
+  $('cropBtn').addEventListener('click', () => setCropMode(!cropMode));
+
   let pending = 0;
   function preview(){
     if (cur < 0) return;
     cancelAnimationFrame(pending);
     pending = requestAnimationFrame(() => {
       const it = items[cur], v = $('view');
-      const scale = Math.min(1, 1400 / Math.max(it.bmp.width, it.bmp.height));
-      const W = Math.round(it.bmp.width * scale), H = Math.round(it.bmp.height * scale);
-      const out = showOriginal ? (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(it.bmp, 0, 0, W, H); return c; })() : render(it.bmp, W, H, params, 7);
+      const [cw, ch] = cropMode ? [it.bmp.width, it.bmp.height] : cropDims(it);
+      const scale = Math.min(1, 1400 / Math.max(cw, ch));
+      const W = Math.max(1, Math.round(cw * scale)), H = Math.max(1, Math.round(ch * scale));
+      const base = cropMode ? it.bmp : cropTo(it, W, H);
+      const out = showOriginal ? (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(base, 0, 0, W, H); return c; })() : render(base, W, H, params, 7);
       v.width = W; v.height = H; v.getContext('2d').drawImage(out, 0, 0);
       v.hidden = false; $('drop').style.display = 'none';
     });
   }
   function select(i){
     cur = i; document.querySelectorAll('#thumbs img').forEach((im, k) => im.classList.toggle('on', k === i));
-    $('badge').style.display = 'none'; preview();
+    $('badge').style.display = 'none'; preview(); drawBox();
   }
   async function addFiles(list){
     const files = Array.from(list).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name));
@@ -234,14 +316,14 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
         items.push({ file: f, bmp, name: f.name.replace(/\.[^.]+$/, '') });
       } catch (e){ msg('Could not open ' + f.name); }
     }
-    $('compare').disabled = $('one').disabled = $('all').disabled = !items.length;
+    $('compare').disabled = $('one').disabled = $('all').disabled = $('cropBtn').disabled = !items.length;
     msg(items.length + ' photo' + (items.length === 1 ? '' : 's') + ' loaded.');
     if (cur < 0 && items.length) select(0);
   }
   function fullRender(it){
-    let W = it.bmp.width, H = it.bmp.height;
+    let [W, H] = cropDims(it);
     const mp = W * H / 1e6; if (mp > 50){ const s = Math.sqrt(50 / mp); W = Math.round(W * s); H = Math.round(H * s); }
-    return render(it.bmp, W, H, params, 7);
+    return render(cropTo(it, W, H), W, H, params, 7);
   }
   const toBlob = (c, q) => new Promise(res => c.toBlob(res, 'image/jpeg', q));
   async function saveOne(){
@@ -311,7 +393,7 @@ textarea{width:100%;height:160px;background:var(--bg);color:var(--text);border:1
   ['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
   stage.addEventListener('drop', e => addFiles(e.dataTransfer.files));
   document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.key === 'ArrowRight' && cur < items.length - 1) select(cur + 1);
     if (e.key === 'ArrowLeft' && cur > 0) select(cur - 1);
   });
